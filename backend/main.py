@@ -321,6 +321,20 @@ async def list_questions(
     return questions
 
 
+@app.post("/questions")
+async def create_question(
+    question: QuestionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new question in the question bank"""
+    db_question = QuestionBank(**question.dict())
+    db.add(db_question)
+    db.commit()
+    db.refresh(db_question)
+    return db_question
+
+
 @app.get("/questions/critical")
 async def list_critical_questions(
     current_user: User = Depends(get_current_user),
