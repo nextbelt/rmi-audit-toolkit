@@ -3,7 +3,7 @@ import React, { CSSProperties, ButtonHTMLAttributes } from 'react';
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'outline' | 'text';
   size?: 'sm' | 'md' | 'lg';
-  fullWidth?: 'boolean';
+  fullWidth?: boolean;
   loading?: boolean;
 }
 
