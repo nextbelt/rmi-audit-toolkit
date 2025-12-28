@@ -73,7 +73,7 @@ export const Login: React.FC = () => {
 
           <Button
             type="submit"
-            fullWidth
+            fullWidth={true}
             loading={isLoading}
             disabled={isLoading}
           >

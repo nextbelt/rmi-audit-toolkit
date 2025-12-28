@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { questionAPI, assessmentAPI } from '../api/client';
-import { Button, Card, Input, TextArea } from '../components';
+import { Button, Card, TextArea } from '../components';
 
 interface Question {
   id: number;
@@ -72,7 +72,10 @@ export const InterviewInterface: React.FC = () => {
       await questionAPI.submitResponse(
         Number(assessmentId),
         currentQuestion.id,
-        currentResponse
+        {
+          ...currentResponse,
+          score: currentResponse.score ?? undefined
+        }
       );
       
       if (currentIndex < questions.length - 1) {

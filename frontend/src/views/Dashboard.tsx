@@ -224,13 +224,13 @@ export const Dashboard: React.FC = () => {
           />
           
           <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
-            <Button type="submit" fullWidth>
+            <Button type="submit" fullWidth={true}>
               Create Assessment
             </Button>
             <Button
               type="button"
               variant="outline"
-              fullWidth
+              fullWidth={true}
               onClick={() => setShowCreateModal(false)}
             >
               Cancel

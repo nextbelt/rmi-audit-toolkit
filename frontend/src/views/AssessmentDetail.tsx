@@ -307,7 +307,7 @@ export const AssessmentDetail: React.FC = () => {
             id="cmms-upload"
           />
           <label htmlFor="cmms-upload">
-            <Button variant="text" as="span" style={{ padding: '0', cursor: 'pointer' }}>
+            <Button variant="text" style={{ padding: '0', cursor: 'pointer' }}>
               Upload CMMS Export →
             </Button>
           </label>
@@ -354,7 +354,7 @@ export const AssessmentDetail: React.FC = () => {
           Your RMI audit report has been generated and is ready to download.
         </p>
         <div style={{ display: 'flex', gap: '12px' }}>
-          <Button onClick={handleDownloadReport} fullWidth>
+          <Button onClick={handleDownloadReport} fullWidth={true}>
             📥 Download PDF Report
           </Button>
         </div>
