@@ -13,4 +13,10 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    allowedHosts: [
+      'rmi-audit-toolkit-frontend-production.up.railway.app',
+      '.railway.app'
+    ]
+  }
 })
