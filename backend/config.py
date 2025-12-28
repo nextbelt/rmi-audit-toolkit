@@ -23,11 +23,20 @@ class Settings(BaseSettings):
     
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = 50
+    MAX_UPLOAD_SIZE: int = 52428800  # bytes
     UPLOAD_DIR: str = "./uploads"
     
     # Reporting
     REPORT_OUTPUT_DIR: str = "./reports"
     LOGO_PATH: Optional[str] = None
+    
+    # Supabase (optional - for enhanced auth)
+    SUPABASE_URL: Optional[str] = None
+    SUPABASE_ANON_KEY: Optional[str] = None
+    SUPABASE_SERVICE_KEY: Optional[str] = None
+    
+    # CORS
+    FRONTEND_URL: str = "http://localhost:3000"
     
     class Config:
         env_file = ".env"
