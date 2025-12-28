@@ -215,6 +215,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+@app.get("/users/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Get current logged-in user"""
+    return current_user
+
+
 # ==================== ASSESSMENT ENDPOINTS ====================
 
 @app.post("/assessments", response_model=AssessmentResponse)
