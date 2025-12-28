@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Button, Card, Input } from '../components';
-import { api } from '../api/client';
+import api from '../api/client';
 
 interface User {
   id: number;
