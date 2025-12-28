@@ -1,0 +1,26 @@
+# Never commit environment files with secrets
+.env
+.env.local
+.env.production.local
+.env.development.local
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

@@ -1,0 +1,49 @@
+# Environment files (contain secrets)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+*.sqlite
+*.db
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+.vite/
+
+# Uploads and reports (generated files)
+backend/uploads/
+backend/reports/
+uploads/
+reports/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+.env.example
+
+# Keep these example files
+!backend/.env.example
+!frontend/.env.production

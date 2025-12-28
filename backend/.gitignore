@@ -1,0 +1,22 @@
+# IMPORTANT: Never commit this file to Git
+# Add to .gitignore immediately
+
+.env
+.env.local
+.env.production
+*.log
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+uploads/
+reports/
+*.db
+*.sqlite
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
