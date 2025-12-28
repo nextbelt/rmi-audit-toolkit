@@ -122,11 +122,14 @@ class ObservationCreate(BaseModel):
 
 
 class QuestionCreate(BaseModel):
-    code: str
+    question_code: str
     pillar: PillarType
     question_type: QuestionType
     question_text: str
     target_role: TargetRole
+    subcategory: str
+    is_critical: bool = False
+    max_score: int = 5
 
 
 # ==================== AUTHENTICATION ====================
