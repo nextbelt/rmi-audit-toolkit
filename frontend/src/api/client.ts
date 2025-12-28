@@ -46,7 +46,7 @@ export const authAPI = {
   },
   
   register: async (email: string, password: string, fullName: string, role: string) => {
-    const response = await api.post('/users/', {
+    const response = await api.post('/users', {
       email,
       password,
       full_name: fullName,
@@ -64,7 +64,7 @@ export const authAPI = {
 // Assessment API
 export const assessmentAPI = {
   list: async () => {
-    const response = await api.get('/assessments/');
+    const response = await api.get('/assessments');
     return response.data;
   },
   
@@ -74,7 +74,7 @@ export const assessmentAPI = {
     start_date: string;
     end_date?: string;
   }) => {
-    const response = await api.post('/assessments/', data);
+    const response = await api.post('/assessments', data);
     return response.data;
   },
   
@@ -109,7 +109,7 @@ export const assessmentAPI = {
 // Question API
 export const questionAPI = {
   listAll: async () => {
-    const response = await api.get('/questions/');
+    const response = await api.get('/questions');
     return response.data;
   },
   
