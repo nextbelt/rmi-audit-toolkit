@@ -7,6 +7,7 @@ import {
   InterviewInterface,
   ObservationChecklist,
   AssessmentDetail,
+  UserManagement,
 } from './views';
 import './styles/global.css';
 
@@ -46,15 +47,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           alignItems: 'center',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h1 style={{
-              fontSize: '1.125rem',
-              fontWeight: 600,
-              margin: 0,
-              color: '#1A1A1A',
-              letterSpacing: '-0.02em',
-            }}>
-              RMI Audit Toolkit
-            </h1>
+            <a href="/dashboard" style={{ textDecoration: 'none', color: 'inherit' }}>
+              <h1 style={{
+                fontSize: '1.125rem',
+                fontWeight: 600,
+                margin: 0,
+                color: '#1A1A1A',
+                letterSpacing: '-0.02em',
+              }}>
+                RMI Audit Toolkit
+              </h1>
+            </a>
             <span style={{
               fontSize: '0.75rem',
               color: '#8A8A8A',
@@ -65,7 +68,39 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           </div>
 
           {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
+              <nav style={{ display: 'flex', gap: '16px' }}>
+                <a 
+                  href="/dashboard" 
+                  style={{
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    color: '#5C5C5C',
+                    textDecoration: 'none',
+                    transition: 'color 0.2s ease'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#0D4F4F'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#5C5C5C'}
+                >
+                  Assessments
+                </a>
+                {user.role === 'admin' && (
+                  <a 
+                    href="/users" 
+                    style={{
+                      fontSize: '0.875rem',
+                      fontWeight: 500,
+                      color: '#5C5C5C',
+                      textDecoration: 'none',
+                      transition: 'color 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#0D4F4F'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#5C5C5C'}
+                  >
+                    Users
+                  </a>
+                )}
+              </nav>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#1A1A1A' }}>
                   {user.full_name}
@@ -164,6 +199,16 @@ function App() {
             <ProtectedRoute>
               <Layout>
                 <ObservationChecklist />
+              </Layout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/users"
+          element={
+            <ProtectedRoute>
+              <Layout>
+                <UserManagement />
               </Layout>
             </ProtectedRoute>
           }

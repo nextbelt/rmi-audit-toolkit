@@ -626,6 +626,50 @@ async def download_report(
     )
 
 
+# ==================== USER MANAGEMENT ENDPOINTS ====================
+
+@app.get("/users", response_model=List[UserResponse])
+async def list_users(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """List all users (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    users = db.query(User).all()
+    return users
+
+
+@app.patch("/users/{user_id}")
+async def update_user(
+    user_id: int,
+    updates: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update user (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update allowed fields
+    if "is_active" in updates:
+        user.is_active = updates["is_active"]
+    if "role" in updates:
+        user.role = updates["role"]
+    if "full_name" in updates:
+        user.full_name = updates["full_name"]
+    
+    db.commit()
+    db.refresh(user)
+    
+    return {"message": "User updated successfully"}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
