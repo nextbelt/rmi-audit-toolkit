@@ -37,7 +37,12 @@ app = FastAPI(
 # CORS middleware for web frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure based on deployment
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://rmi-audit-toolkit-frontend-production.up.railway.app",
+        "*"  # Allow all for development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

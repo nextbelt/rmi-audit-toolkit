@@ -4,7 +4,7 @@ Create local admin user for development
 import requests
 
 # Local backend
-BACKEND_URL = "http://localhost:8000"
+BACKEND_URL = "http://localhost:8001"
 
 admin_user = {
     "email": "nextbelt@next-belt.com",
