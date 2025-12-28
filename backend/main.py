@@ -121,6 +121,14 @@ class ObservationCreate(BaseModel):
     location: Optional[str] = None
 
 
+class QuestionCreate(BaseModel):
+    code: str
+    pillar: PillarType
+    question_type: QuestionType
+    question_text: str
+    target_role: TargetRole
+
+
 # ==================== AUTHENTICATION ====================
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -324,6 +332,31 @@ async def list_critical_questions(
         QuestionBank.is_active == True
     ).all()
     return questions
+
+
+@app.post("/questions")
+async def create_question(
+    question: QuestionCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Create a new question (admin only)"""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    
+    db_question = QuestionBank(
+        code=question.code,
+        pillar=question.pillar,
+        question_type=question.question_type,
+        question_text=question.question_text,
+        target_role=question.target_role,
+        is_active=True,
+        is_critical=False
+    )
+    db.add(db_question)
+    db.commit()
+    db.refresh(db_question)
+    return db_question
 
 
 # ==================== QUESTION RESPONSE ENDPOINTS ====================
