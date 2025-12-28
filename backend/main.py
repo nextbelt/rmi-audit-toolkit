@@ -34,7 +34,7 @@ app = FastAPI(
     description="Enterprise-grade Reliability Maturity Index (RMI) Audit Platform"
 )
 
-# CORS middleware for web frontend
+# CORS middleware for web frontend (supports local development on port 3000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
