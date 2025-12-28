@@ -70,9 +70,8 @@ export const assessmentAPI = {
   
   create: async (data: {
     client_name: string;
-    site_location: string;
-    start_date: string;
-    end_date?: string;
+    site_name: string;
+    assessment_date: string;
   }) => {
     const response = await api.post('/assessments', data);
     return response.data;

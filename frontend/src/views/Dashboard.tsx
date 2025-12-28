@@ -7,9 +7,8 @@ import { format } from 'date-fns';
 interface Assessment {
   id: number;
   client_name: string;
-  site_location: string;
-  start_date: string;
-  end_date?: string;
+  site_name: string;
+  assessment_date: string;
   status: string;
   created_at: string;
 }
@@ -20,9 +19,8 @@ export const Dashboard: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newAssessment, setNewAssessment] = useState({
     client_name: '',
-    site_location: '',
-    start_date: '',
-    end_date: '',
+    site_name: '',
+    assessment_date: '',
   });
   const navigate = useNavigate();
 
@@ -47,7 +45,7 @@ export const Dashboard: React.FC = () => {
       const created = await assessmentAPI.create(newAssessment);
       setAssessments([...assessments, created]);
       setShowCreateModal(false);
-      setNewAssessment({ client_name: '', site_location: '', start_date: '', end_date: '' });
+      setNewAssessment({ client_name: '', site_name: '', assessment_date: '' });
     } catch (error) {
       console.error('Failed to create assessment:', error);
     }
@@ -159,13 +157,10 @@ export const Dashboard: React.FC = () => {
                     </span>
                   </div>
                   <p style={{ color: '#5C5C5C', marginBottom: '16px' }}>
-                    📍 {assessment.site_location}
+                    📍 {assessment.site_name}
                   </p>
                   <div style={{ display: 'flex', gap: '24px', fontSize: '0.875rem', color: '#8A8A8A', fontFamily: "'IBM Plex Mono', monospace" }}>
-                    <span>Started: {format(new Date(assessment.start_date), 'MMM dd, yyyy')}</span>
-                    {assessment.end_date && (
-                      <span>Ended: {format(new Date(assessment.end_date), 'MMM dd, yyyy')}</span>
-                    )}
+                    <span>Date: {format(new Date(assessment.assessment_date), 'MMM dd, yyyy')}</span>
                   </div>
                 </div>
                 <Button
@@ -201,26 +196,19 @@ export const Dashboard: React.FC = () => {
           />
           
           <Input
-            label="Site Location"
-            value={newAssessment.site_location}
-            onChange={(e) => setNewAssessment({ ...newAssessment, site_location: e.target.value })}
+            label="Site Name"
+            value={newAssessment.site_name}
+            onChange={(e) => setNewAssessment({ ...newAssessment, site_name: e.target.value })}
             placeholder="e.g., Houston Plant #3"
             required
           />
           
           <Input
-            label="Start Date"
+            label="Assessment Date"
             type="date"
-            value={newAssessment.start_date}
-            onChange={(e) => setNewAssessment({ ...newAssessment, start_date: e.target.value })}
+            value={newAssessment.assessment_date}
+            onChange={(e) => setNewAssessment({ ...newAssessment, assessment_date: e.target.value })}
             required
-          />
-          
-          <Input
-            label="End Date (Optional)"
-            type="date"
-            value={newAssessment.end_date}
-            onChange={(e) => setNewAssessment({ ...newAssessment, end_date: e.target.value })}
           />
           
           <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
