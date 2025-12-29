@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { questionAPI, assessmentAPI } from '../api/client';
 import { Button, Card, TextArea } from '../components';
@@ -19,6 +19,7 @@ interface Response {
   score: number | null;
   has_evidence: boolean;
   notes: string;
+  is_na?: boolean;  // New: Not Applicable flag
 }
 
 export const InterviewInterface: React.FC = () => {
@@ -28,7 +29,11 @@ export const InterviewInterface: React.FC = () => {
   const [responses, setResponses] = useState<Record<number, Response>>({});
   const [loading, setLoading] = useState(true);
   const [assessment, setAssessment] = useState<any>(null);
+  const [autosaving, setAutosaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [validationError, setValidationError] = useState<string>('');
   const navigate = useNavigate();
+  const autosaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     loadData();
@@ -36,12 +41,28 @@ export const InterviewInterface: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [questionsData, assessmentData] = await Promise.all([
+      const [questionsData, assessmentData, savedResponses] = await Promise.all([
         questionAPI.listAll(),
         assessmentAPI.getById(Number(assessmentId)),
+        questionAPI.getResponses(Number(assessmentId)).catch(() => []),
       ]);
       setQuestions(questionsData);
       setAssessment(assessmentData);
+      
+      // Load saved responses into state
+      if (savedResponses && savedResponses.length > 0) {
+        const responsesMap: Record<number, Response> = {};
+        savedResponses.forEach((resp: any) => {
+          responsesMap[resp.question_id] = {
+            answer_text: resp.response_value || '',
+            score: resp.response_value && !isNaN(Number(resp.response_value)) ? Number(resp.response_value) : null,
+            has_evidence: resp.has_evidence || false,
+            notes: resp.evidence_notes || '',
+            is_na: resp.is_na || false,
+          };
+        });
+        setResponses(responsesMap);
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -55,9 +76,55 @@ export const InterviewInterface: React.FC = () => {
     score: null,
     has_evidence: false,
     notes: '',
+    is_na: false,
   };
 
+  // Autosave - debounced save draft responses
+  const saveCurrentResponse = useCallback(async (isDraft: boolean = true) => {
+    if (!currentQuestion) return;
+    
+    try {
+      setAutosaving(true);
+      await questionAPI.submitResponse(
+        Number(assessmentId),
+        currentQuestion.id,
+        {
+          ...currentResponse,
+          score: currentResponse.score ?? undefined,
+          is_draft: isDraft,
+        }
+      );
+      setLastSaved(new Date());
+      setAutosaving(false);
+    } catch (error) {
+      console.error('Autosave failed:', error);
+      setAutosaving(false);
+    }
+  }, [assessmentId, currentQuestion, currentResponse]);
+
+  // Trigger autosave after user stops typing (1 second debounce)
+  useEffect(() => {
+    if (!currentQuestion) return;
+    
+    // Clear existing timer
+    if (autosaveTimerRef.current) {
+      clearTimeout(autosaveTimerRef.current);
+    }
+    
+    // Set new timer - save after 1 second of inactivity
+    autosaveTimerRef.current = setTimeout(() => {
+      saveCurrentResponse(true);
+    }, 1000);
+    
+    return () => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [currentResponse, currentQuestion, saveCurrentResponse]);
+
   const handleResponseChange = (field: keyof Response, value: any) => {
+    setValidationError(''); // Clear validation errors when user types
     setResponses({
       ...responses,
       [currentQuestion.id]: {
@@ -67,24 +134,48 @@ export const InterviewInterface: React.FC = () => {
     });
   };
 
-  const handleSubmitResponse = async () => {
+  const handleSubmitResponse = async (navigateAfter: boolean = true) => {
+    // EVIDENCE VALIDATION: Enforce evidence requirement
+    if (currentQuestion.evidence_required && 
+        currentResponse.score !== null && 
+        currentResponse.score >= 4 && 
+        !currentResponse.has_evidence && 
+        !currentResponse.is_na) {
+      setValidationError(
+        '⚠️ Evidence is required for scores ≥4. Please check "Evidence Provided" or reduce the score.'
+      );
+      return;
+    }
+    
     try {
+      // Clear any existing autosave timer
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+      }
+      
+      // Submit as final (not draft)
       await questionAPI.submitResponse(
         Number(assessmentId),
         currentQuestion.id,
         {
           ...currentResponse,
-          score: currentResponse.score ?? undefined
+          score: currentResponse.score ?? undefined,
+          is_draft: false,  // This is a final submission
         }
       );
       
-      if (currentIndex < questions.length - 1) {
-        setCurrentIndex(currentIndex + 1);
-      } else {
-        navigate(`/assessment/${assessmentId}`);
+      setValidationError('');
+      
+      if (navigateAfter) {
+        if (currentIndex < questions.length - 1) {
+          setCurrentIndex(currentIndex + 1);
+        } else {
+          navigate(`/assessment/${assessmentId}`);
+        }
       }
     } catch (error) {
       console.error('Failed to submit response:', error);
+      setValidationError('Failed to save response. Please try again.');
     }
   };
 
@@ -205,15 +296,45 @@ export const InterviewInterface: React.FC = () => {
 
         {/* Response Fields */}
         <div style={{ marginBottom: '24px' }}>
+          {/* N/A Option */}
+          <div style={{
+            padding: '12px 16px',
+            background: '#FFF9E6',
+            borderRadius: '8px',
+            marginBottom: '16px',
+            border: '1px solid #F4D03F',
+          }}>
+            <label style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              cursor: 'pointer',
+              fontWeight: 500,
+              fontSize: '0.875rem',
+            }}>
+              <input
+                type="checkbox"
+                checked={currentResponse.is_na || false}
+                onChange={(e) => handleResponseChange('is_na', e.target.checked)}
+                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+              />
+              Not Applicable (N/A)
+              <span style={{ color: '#6B6B6B', fontSize: '0.75rem', fontWeight: 400 }}>
+                - Check this if the question doesn't apply to this site/asset
+              </span>
+            </label>
+          </div>
+
           <TextArea
             label="Answer / Observations"
             value={currentResponse.answer_text}
             onChange={(e) => handleResponseChange('answer_text', e.target.value)}
             rows={6}
             placeholder="Record the interviewee's response, key observations, and any relevant details..."
+            disabled={currentResponse.is_na}
           />
 
-          {currentQuestion.question_type === 'scored' && (
+          {!currentResponse.is_na && currentQuestion.question_type === 'scored' && (
             <div style={{ marginBottom: '24px' }}>
               <label style={{
                 display: 'block',
@@ -230,16 +351,18 @@ export const InterviewInterface: React.FC = () => {
                     key={score}
                     type="button"
                     onClick={() => handleResponseChange('score', score)}
+                    disabled={currentResponse.is_na}
                     style={{
                       flex: 1,
                       padding: '16px',
                       border: `2px solid ${currentResponse.score === score ? '#0D4F4F' : '#E5E4E0'}`,
                       borderRadius: '8px',
-                      background: currentResponse.score === score ? '#0D4F4F' : '#fff',
-                      color: currentResponse.score === score ? '#fff' : '#1A1A1A',
+                      background: currentResponse.score === score ? '#0D4F4F' : currentResponse.is_na ? '#F5F5F5' : '#fff',
+                      color: currentResponse.score === score ? '#fff' : currentResponse.is_na ? '#C0C0C0' : '#1A1A1A',
                       fontSize: '1.25rem',
                       fontWeight: 600,
-                      cursor: 'pointer',
+                      cursor: currentResponse.is_na ? 'not-allowed' : 'pointer',
+                      opacity: currentResponse.is_na ? 0.5 : 1,
                       transition: 'all 0.2s ease',
                       fontFamily: "'IBM Plex Mono', monospace",
                     }}
@@ -254,7 +377,7 @@ export const InterviewInterface: React.FC = () => {
             </div>
           )}
 
-          {currentQuestion.evidence_required && (
+          {!currentResponse.is_na && currentQuestion.evidence_required && (
             <div style={{
               padding: '16px',
               background: '#F2F1EE',
@@ -291,8 +414,39 @@ export const InterviewInterface: React.FC = () => {
             onChange={(e) => handleResponseChange('notes', e.target.value)}
             rows={3}
             placeholder="Any clarifications, follow-up items, or context..."
+            disabled={currentResponse.is_na}
           />
         </div>
+
+        {/* Validation Error */}
+        {validationError && (
+          <div style={{
+            padding: '12px 16px',
+            background: '#FEE',
+            border: '1px solid #C00',
+            borderRadius: '8px',
+            color: '#C00',
+            fontSize: '0.875rem',
+            marginBottom: '16px',
+          }}>
+            {validationError}
+          </div>
+        )}
+
+        {/* Autosave Status */}
+        {(autosaving || lastSaved) && (
+          <div style={{
+            padding: '8px 12px',
+            background: '#F0F9FF',
+            borderRadius: '6px',
+            fontSize: '0.75rem',
+            color: '#5C5C5C',
+            marginBottom: '16px',
+            textAlign: 'center',
+          }}>
+            {autosaving ? '💾 Saving draft...' : `✓ Draft saved at ${lastSaved?.toLocaleTimeString()}`}
+          </div>
+        )}
 
         {/* Navigation Buttons */}
         <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between' }}>
@@ -305,10 +459,16 @@ export const InterviewInterface: React.FC = () => {
           </Button>
 
           <div style={{ display: 'flex', gap: '12px' }}>
-            <Button variant="secondary" onClick={() => navigate(`/assessment/${assessmentId}`)}>
+            <Button 
+              variant="secondary" 
+              onClick={async () => {
+                await handleSubmitResponse(false);  // Save current response
+                navigate(`/assessment/${assessmentId}`);
+              }}
+            >
               Save & Exit
             </Button>
-            <Button onClick={handleSubmitResponse}>
+            <Button onClick={() => handleSubmitResponse(true)}>
               {currentIndex < questions.length - 1 ? 'Next →' : 'Complete Interview'}
             </Button>
           </div>

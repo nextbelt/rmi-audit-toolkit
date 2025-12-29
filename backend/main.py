@@ -8,12 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
+from typing import Optional
 from typing import List, Optional
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 import os
+import logging
 
 from database import get_db, init_db
 from models import (
@@ -26,6 +28,16 @@ from observation_module import ObservationManager
 from data_analysis_module import CMMSDataAnalyzer
 from iso14224_module import ISO14224Validator
 from config import settings
+from ai_scoring import AIScoringEngine
+
+# Configure logging to suppress 401 (expected auth errors)
+class SuppressAuth401Filter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        # Suppress 401 Unauthorized logs (expected during normal auth flow)
+        return not (hasattr(record, 'status_code') and record.status_code == 401)
+
+# Apply filter to uvicorn access logger
+logging.getLogger("uvicorn.access").addFilter(SuppressAuth401Filter())
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -34,18 +46,20 @@ app = FastAPI(
     description="Enterprise-grade Reliability Maturity Index (RMI) Audit Platform"
 )
 
-# CORS middleware for web frontend (supports local development on port 3000)
+# CORS middleware for web frontend (supports local development on port 3000, 3001, 4000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://rmi-audit-toolkit-frontend-production.up.railway.app",
-        "*"  # Allow all for development
+        "http://localhost:4000",
+        "https://rmi-audit-toolkit-frontend-production.up.railway.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],  # Safari compatibility
+    max_age=3600,  # Cache preflight requests for 1 hour
 )
 
 # Mount static files for evidence uploads
@@ -105,8 +119,11 @@ class AssessmentResponse(BaseModel):
 class QuestionResponseCreate(BaseModel):
     question_id: int
     response_value: str
+    numeric_score: Optional[float] = None  # New: Allow direct numeric score
     respondent_id: Optional[int] = None
     evidence_notes: Optional[str] = None
+    is_draft: bool = False        # New: Draft responses (not counted in scoring)
+    is_na: bool = False           # New: Not Applicable (excluded from scoring)
 
 
 class ObservationCreate(BaseModel):
@@ -134,11 +151,20 @@ class QuestionCreate(BaseModel):
 
 # ==================== AUTHENTICATION ====================
 
+# Local development mode - bypasses bcrypt
+LOCAL_DEV_MODE = os.getenv("LOCAL_DEV_MODE", "false").lower() == "true"
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
+    if LOCAL_DEV_MODE:
+        # Skip bcrypt in local dev mode - just check if password matches
+        return plain_password == "admin123"  # Simple password for local dev
     return pwd_context.verify(plain_password, hashed_password)
 
 
 def get_password_hash(password: str) -> str:
+    if LOCAL_DEV_MODE:
+        # Return a dummy hash in local dev mode
+        return "local_dev_hash"
     return pwd_context.hash(password)
 
 
@@ -221,7 +247,14 @@ async def register_user(user: UserCreate, db: Session = Depends(get_db)):
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Login and get access token"""
     user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    if user:
+        password_valid = verify_password(form_data.password, user.hashed_password)
+        if not password_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password"
+            )
+    else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password"
@@ -398,10 +431,72 @@ async def submit_response(
     
     # Calculate numeric score based on response
     numeric_score = None
-    if question.question_type == QuestionType.LIKERT:
-        numeric_score = float(response.response_value)
-    elif question.question_type == QuestionType.BINARY:
-        numeric_score = 5.0 if response.response_value.lower() == 'yes' else 1.0
+    ai_rationale = None
+    ai_confidence = None
+    
+    # PRIORITY 1: Use numeric_score if directly provided by frontend
+    if response.numeric_score is not None:
+        numeric_score = response.numeric_score
+        print(f"Using provided numeric score: {numeric_score}")
+    else:
+        # PRIORITY 2: Try to parse from response_value or use AI scoring
+        # Check if there's an existing response to reuse AI scoring
+        existing_response = db.query(QuestionResponse).filter(
+            QuestionResponse.assessment_id == assessment_id,
+            QuestionResponse.question_id == response.question_id
+        ).order_by(QuestionResponse.id.desc()).first()
+        
+        if question.question_type == QuestionType.LIKERT:
+            # Try to convert to float if it's a numeric value (1-5)
+            try:
+                numeric_score = float(response.response_value)
+            except ValueError:
+                # It's a text response - only use AI to score it if this is a FINAL submission (not a draft)
+                # and we haven't already scored it
+                if not response.is_draft and settings.OPENAI_API_KEY:
+                    # Check if we already have AI scoring from a previous submission
+                    if existing_response and existing_response.numeric_score is not None:
+                        # Reuse existing AI score - don't call API again
+                        numeric_score = existing_response.numeric_score
+                        print(f"Reusing existing AI score: {numeric_score}")
+                    else:
+                        # This is a new final submission - call AI scoring ONCE
+                        try:
+                            print(f"Calling AI scoring for question {response.question_id} (first time)")
+                            ai_engine = AIScoringEngine()
+                            ai_result = ai_engine.score_text_response(
+                                question_text=question.question_text,
+                                response_text=response.response_value,
+                                question_type=question.question_type.value
+                            )
+                            numeric_score = ai_result.get("numeric_score")
+                            ai_rationale = ai_result.get("rationale")
+                            ai_confidence = ai_result.get("confidence")
+                            
+                            # Add AI analysis to evidence notes
+                            ai_note = f"\n\n[AI Analysis - {ai_confidence} confidence]\n{ai_rationale}"
+                            if response.evidence_notes:
+                                response.evidence_notes += ai_note
+                            else:
+                                response.evidence_notes = ai_note
+                                
+                        except Exception as e:
+                            print(f"AI scoring failed: {str(e)}")
+                            # Leave numeric_score as None if AI fails
+                            pass
+                elif response.is_draft and existing_response and existing_response.numeric_score is not None:
+                    # For drafts, reuse previous score if available
+                    numeric_score = existing_response.numeric_score
+                    
+        elif question.question_type == QuestionType.BINARY:
+            try:
+                numeric_score = float(response.response_value)
+            except ValueError:
+                numeric_score = 5.0 if response.response_value.lower() == 'yes' else 1.0
+    
+    # Handle N/A responses - set numeric_score to None so it's excluded from calculations
+    if response.is_na:
+        numeric_score = None  # N/A responses don't contribute to score
     
     # Create response
     db_response = QuestionResponse(
@@ -412,6 +507,8 @@ async def submit_response(
         numeric_score=numeric_score,
         evidence_provided=bool(response.evidence_notes),
         evidence_notes=response.evidence_notes,
+        is_draft=response.is_draft,     # Store draft state
+        is_na=response.is_na,           # Store N/A flag
         answered_by=current_user.id
     )
     

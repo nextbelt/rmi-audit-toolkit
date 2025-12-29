@@ -14,13 +14,28 @@ A complete, production-ready web application for conducting professional reliabi
 
 ## ✨ Features
 
+### Core Functionality
 ✅ **16 Pre-loaded Questions** across People, Process, Technology pillars  
-✅ **Evidence-Based Scoring** (scores ≥4 require proof)  
+✅ **Evidence-Based Scoring** (scores ≥4 require proof - enforced at submission)  
+✅ **AI-Assisted Scoring** - GPT-4o-mini evaluates narrative text responses  
 ✅ **CMMS Data Analysis** - Upload work orders for automated metrics  
 ✅ **ISO 14224 Validation** - Data quality checks  
 ✅ **Field Observations** - Tablet-friendly checklists  
 ✅ **Executive Reports** - Auto-generated PDFs with charts  
 ✅ **Role-Weighted Scoring** - Technicians 60%, Managers 20%, Auditors 20%  
+
+### 🆕 Data Saving & UX Improvements (Dec 2024)
+✅ **Autosave with Debouncing** - Saves drafts 1 second after typing stops  
+✅ **Save & Exit Fixed** - Now actually saves before navigating away  
+✅ **Evidence Validation** - Blocks high scores without evidence checkbox  
+✅ **N/A (Not Applicable)** - Exclude irrelevant questions from scoring  
+✅ **Offline Queue** - Works in basements/remote sites, syncs when connection restored  
+✅ **Safari Compatibility** - Full support for macOS/iOS Safari browsers  
+
+### Security & Methodology
+✅ **Draft vs Final Responses** - Drafts excluded from RMI calculations  
+✅ **Cleaner Logs** - Suppressed 401 auth noise in terminal  
+✅ **Environment-Based Credentials** - No hardcoded passwords  
 
 ## 📁 Project Structure
 
@@ -45,8 +60,10 @@ RMI Audit Toolkit/
 ```bash
 cd backend
 pip install -r requirements.txt
-python init_db.py
-python main.py
+python init_local_db.py  # Creates SQLite database with admin user
+$env:LOCAL_DEV_MODE="true"  # Windows PowerShell
+# export LOCAL_DEV_MODE=true  # Mac/Linux
+python -m uvicorn main:app --reload --port 8000
 # → http://localhost:8000
 ```
 
@@ -55,12 +72,18 @@ python main.py
 cd frontend
 npm install
 npm run dev
-# → http://localhost:3000
+# → http://localhost:3001 (or 3000)
 ```
 
 **Demo Login:**
-- Email: `admin@nextbelt.com`
+- Email: `admin@local.com`
 - Password: `admin123`
+
+**Database Migration (if updating):**
+```bash
+cd backend
+python migrate_add_draft_na.py  # Adds is_draft and is_na columns
+```
 
 ## ☁️ Deployment to Production
 
@@ -93,8 +116,17 @@ Matches NextBelt website:
 - 4 = Predictive (data-driven)
 - 5 = Prescriptive (optimized, world-class)
 
-**Evidence Lock:** Scores ≥4 require proof, else capped at 3.0  
-**Weakest Link:** Critical failures cap pillar at 3.0 max
+**Scoring Logic:**
+- **Evidence Lock:** Scores ≥4 require proof (enforced at submission, not after-the-fact)
+- **Weakest Link:** Critical failures cap pillar at 3.0 max
+- **Draft Exclusion:** Only final responses count toward RMI score
+- **N/A Handling:** Non-applicable questions excluded from total score calculation
+
+**AI Scoring (Optional):**
+- Uses OpenAI GPT-4o-mini to evaluate narrative text responses
+- Provides 1-5 score + rationale + confidence level
+- Add `OPENAI_API_KEY` to `.env` to enable
+- Costs ~$0.002 per text response
 
 ## 🔧 Customization
 
@@ -109,10 +141,20 @@ Edit `backend/scoring_engine.py`
 
 ## 📚 Documentation
 
+### User Guides
+- **Deployment**: [DEPLOYMENT.md](DEPLOYMENT.md) - Railway + production setup
+- **Data Saving**: [DATA_SAVING_IMPROVEMENTS.md](DATA_SAVING_IMPROVEMENTS.md) - Autosave, N/A, offline queue
+- **Safari Issues**: [SAFARI_COMPATIBILITY.md](SAFARI_COMPATIBILITY.md) - Troubleshooting for Safari users
+
+### Technical References
 - **Backend**: `backend/README.md`
 - **Frontend**: `frontend/README.md`
-- **Deployment**: `DEPLOYMENT.md`
-- **API Docs**: `/docs` endpoint
+- **Roadmap**: [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) - Security fixes & methodology improvements
+- **API Docs**: `/docs` endpoint (Swagger UI)
+
+### Testing
+- **Database Migration**: `backend/migrate_add_draft_na.py`
+- **Data Validation**: `backend/test_data_saving.py`
 
 ## 📞 Support
 

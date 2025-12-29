@@ -16,46 +16,46 @@ from database import Base
 
 class PillarType(str, enum.Enum):
     """Three pillars of RMI assessment"""
-    PEOPLE = "people"
-    PROCESS = "process"
-    TECHNOLOGY = "technology"
+    PEOPLE = "PEOPLE"
+    PROCESS = "PROCESS"
+    TECHNOLOGY = "TECHNOLOGY"
 
 
 class QuestionType(str, enum.Enum):
     """Types of assessment questions"""
-    LIKERT = "likert"  # 1-5 scale
-    BINARY = "binary"  # Yes/No
-    MULTI_SELECT = "multi_select"
-    DATA_INPUT = "data_input"  # Numeric or percentage
-    OBSERVATIONAL = "observational"  # Field observation
+    LIKERT = "LIKERT"  # 1-5 scale
+    BINARY = "BINARY"  # Yes/No
+    MULTI_SELECT = "MULTI_SELECT"
+    DATA_INPUT = "DATA_INPUT"  # Numeric or percentage
+    OBSERVATIONAL = "OBSERVATIONAL"  # Field observation
 
 
 class TargetRole(str, enum.Enum):
     """Who the question is directed at"""
-    TECHNICIAN = "technician"
-    SUPERVISOR = "supervisor"
-    MANAGER = "manager"
-    PLANNER = "planner"
-    AUDITOR = "auditor"  # For observations/data analysis
+    TECHNICIAN = "TECHNICIAN"
+    SUPERVISOR = "SUPERVISOR"
+    MANAGER = "MANAGER"
+    PLANNER = "PLANNER"
+    AUDITOR = "AUDITOR"  # For observations/data analysis
 
 
 class AssessmentStatus(str, enum.Enum):
     """Lifecycle status of an audit"""
-    DRAFT = "draft"
-    IN_PROGRESS = "in_progress"
-    REVIEW = "review"
-    COMPLETED = "completed"
-    ARCHIVED = "archived"
+    DRAFT = "DRAFT"
+    IN_PROGRESS = "IN_PROGRESS"
+    REVIEW = "REVIEW"
+    COMPLETED = "COMPLETED"
+    ARCHIVED = "ARCHIVED"
 
 
 class EvidenceType(str, enum.Enum):
     """Types of evidence that can be attached"""
-    PHOTO = "photo"
-    DOCUMENT = "document"
-    SCREENSHOT = "screenshot"
-    CMMS_EXPORT = "cmms_export"
-    NOTE = "note"
-    VIDEO = "video"
+    PHOTO = "PHOTO"
+    DOCUMENT = "DOCUMENT"
+    SCREENSHOT = "SCREENSHOT"
+    CMMS_EXPORT = "CMMS_EXPORT"
+    NOTE = "NOTE"
+    VIDEO = "VIDEO"
 
 
 # ==================== MODELS ====================
@@ -192,6 +192,10 @@ class QuestionResponse(Base):
     # Evidence Lock
     evidence_provided = Column(Boolean, default=False)
     evidence_notes = Column(Text, nullable=True)
+    
+    # New: Draft and N/A handling
+    is_draft = Column(Boolean, default=False)  # Draft responses (not counted in scoring)
+    is_na = Column(Boolean, default=False)     # Not Applicable (excluded from scoring)
     
     # Metadata
     answered_at = Column(DateTime, default=datetime.utcnow)

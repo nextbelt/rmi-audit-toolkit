@@ -42,7 +42,12 @@ export const Dashboard: React.FC = () => {
   const handleCreateAssessment = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const created = await assessmentAPI.create(newAssessment);
+      // Convert date string to ISO datetime format
+      const assessmentData = {
+        ...newAssessment,
+        assessment_date: new Date(newAssessment.assessment_date).toISOString(),
+      };
+      const created = await assessmentAPI.create(assessmentData);
       setAssessments([...assessments, created]);
       setShowCreateModal(false);
       setNewAssessment({ client_name: '', site_name: '', assessment_date: '' });

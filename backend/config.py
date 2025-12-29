@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     # Application
     APP_NAME: str = "RMI Audit Software"
     VERSION: str = "1.0.0"
-    DEBUG: bool = True
+    DEBUG: bool = False
     
     # File Upload
     MAX_UPLOAD_SIZE_MB: int = 50
@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
+    
+    # OpenAI
+    OPENAI_API_KEY: Optional[str] = None
     
     class Config:
         env_file = ".env"

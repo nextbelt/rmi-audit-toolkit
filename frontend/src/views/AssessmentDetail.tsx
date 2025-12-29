@@ -93,9 +93,9 @@ export const AssessmentDetail: React.FC = () => {
   }
 
   const radarData = scores?.pillar_scores ? [
-    { pillar: 'People', score: scores.pillar_scores.people || 0 },
-    { pillar: 'Process', score: scores.pillar_scores.process || 0 },
-    { pillar: 'Technology', score: scores.pillar_scores.technology || 0 },
+    { pillar: 'People', score: scores.pillar_scores.people?.final_score || 0 },
+    { pillar: 'Process', score: scores.pillar_scores.process?.final_score || 0 },
+    { pillar: 'Technology', score: scores.pillar_scores.technology?.final_score || 0 },
   ] : [];
 
   const criticalObservations = observations.filter((obs: any) => 
@@ -149,7 +149,7 @@ export const AssessmentDetail: React.FC = () => {
                 lineHeight: 1,
                 marginBottom: '8px',
               }}>
-                {scores.overall_rmi.toFixed(1)}
+                {scores?.overall_rmi?.toFixed(1) || '0.0'}
               </div>
               <div style={{
                 fontSize: '0.875rem',
@@ -198,7 +198,7 @@ export const AssessmentDetail: React.FC = () => {
               gridTemplateColumns: 'repeat(3, 1fr)',
               gap: '24px',
             }}>
-              {Object.entries(scores.pillar_scores).map(([pillar, score]: any) => (
+              {Object.entries(scores.pillar_scores).map(([pillar, scoreData]: any) => (
                 <div key={pillar}>
                   <div style={{
                     fontSize: '0.75rem',
@@ -214,7 +214,7 @@ export const AssessmentDetail: React.FC = () => {
                     fontWeight: 600,
                     fontFamily: "'IBM Plex Mono', monospace",
                   }}>
-                    {score.toFixed(1)}
+                    {(typeof scoreData === 'number' ? scoreData : scoreData?.final_score || 0).toFixed(1)}
                   </div>
                 </div>
               ))}

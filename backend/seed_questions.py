@@ -1,12 +1,18 @@
 """Seed the question bank with predefined RMI assessment questions."""
 import requests
 import sys
+import os
 
-API_URL = "https://rmi-audit-toolkit-backend-production.up.railway.app"
+API_URL = os.getenv("API_URL", "http://localhost:8000")
 
-# Login credentials
-EMAIL = "nextbelt@next-belt.com"
-PASSWORD = "C/aljan2026*"
+# Login credentials - NEVER commit these!
+EMAIL = os.getenv("ADMIN_EMAIL")
+PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+if not EMAIL or not PASSWORD:
+    print("❌ ERROR: ADMIN_EMAIL and ADMIN_PASSWORD environment variables must be set")
+    print("Example: export ADMIN_EMAIL=admin@company.com ADMIN_PASSWORD=your-secure-password")
+    sys.exit(1)
 
 # Predefined questions
 QUESTIONS = [
@@ -54,7 +60,7 @@ def main():
     # Add questions
     added = 0
     for q in QUESTIONS:
-        print(f"Adding {q['code']}: {q['question_text'][:60]}...")
+        print(f"Adding {q['question_code']}: {q['question_text'][:60]}...")
         response = requests.post(f"{API_URL}/questions", json=q, headers=headers)
         
         if response.status_code in [200, 201]:

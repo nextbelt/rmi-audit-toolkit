@@ -73,26 +73,40 @@ class ScoringEngine:
         }
     
     def _calculate_pillar_score(self, assessment_id: int, pillar: PillarType) -> Dict:
-        """Calculate score for a single pillar"""
+        """Calculate score for a single pillar with observations (20% weight)"""
         
-        # Get all responses for this pillar
+        # Get all responses for this pillar (exclude drafts and N/A responses)
         responses = self.db.query(QuestionResponse, QuestionBank).join(
             QuestionBank
         ).filter(
             QuestionResponse.assessment_id == assessment_id,
-            QuestionBank.pillar == pillar
+            QuestionBank.pillar == pillar,
+            QuestionResponse.is_draft == False,  # Exclude draft responses
+            QuestionResponse.is_na == False      # Exclude N/A responses
         ).all()
         
-        if not responses:
+        # Get all observations for this pillar
+        observations = self.db.query(Observation).filter(
+            Observation.assessment_id == assessment_id,
+            Observation.pillar == pillar
+        ).all()
+        
+        if not responses and not observations:
             return {
                 "raw_score": 0,
                 "weighted_score": 0,
                 "final_score": 0,
                 "confidence": "No Data",
-                "evidence_coverage": 0
+                "evidence_coverage": 0,
+                "observation_count": 0,
+                "interview_score": 0,
+                "observation_score": 0
             }
         
-        # Calculate weighted average by role and question weight
+        # ==========================================
+        # PART 1: Calculate Interview Score (80%)
+        # ==========================================
+        interview_score = 0
         total_weighted_score = 0
         total_weight = 0
         evidence_count = 0
@@ -131,29 +145,79 @@ class ScoringEngine:
                     "question": question.question_text
                 })
         
-        # Calculate raw weighted score
-        raw_score = total_weighted_score / total_weight if total_weight > 0 else 0
+        # Calculate interview score (80% weight)
+        interview_score = total_weighted_score / total_weight if total_weight > 0 else 0
         
-        # Apply weakest link logic - critical failures cap the pillar score
-        final_score = raw_score
+        # ==========================================
+        # PART 2: Calculate Observation Score (20%)
+        # ==========================================
+        observation_score = 0
+        observation_critical_failures = []
+        
+        if observations:
+            # Convert pass/fail to numeric scores
+            obs_scores = []
+            for obs in observations:
+                if obs.pass_fail_result is not None:
+                    # Pass = 5 points, Fail = 1 point
+                    obs_numeric = 5 if obs.pass_fail_result else 1
+                    obs_scores.append(obs_numeric)
+                    
+                    # Check for critical observation failures
+                    if obs.type and 'safety' in obs.type.lower() and not obs.pass_fail_result:
+                        observation_critical_failures.append({
+                            "observation_title": obs.title,
+                            "type": obs.type,
+                            "severity": obs.severity,
+                            "reason": "Safety observation failure"
+                        })
+            
+            # Average observation score
+            observation_score = sum(obs_scores) / len(obs_scores) if obs_scores else 0
+        
+        # ==========================================
+        # PART 3: Combine Scores with Weights
+        # ==========================================
+        if observations and responses:
+            # Both interviews and observations: 80/20 split
+            combined_score = (interview_score * 0.80) + (observation_score * 0.20)
+        elif responses:
+            # Only interviews: use interview score
+            combined_score = interview_score
+        else:
+            # Only observations: use observation score
+            combined_score = observation_score
+        
+        # ==========================================
+        # PART 4: Apply Weakest Link Logic
+        # ==========================================
+        final_score = combined_score
+        
+        # Interview critical failures
         if critical_failures:
-            # If any critical question scores <= 2, cap pillar at 3.0
             worst_critical = min(cf['score'] for cf in critical_failures)
             if worst_critical <= 2:
                 final_score = min(final_score, 3.0)
+        
+        # Observation critical failures (Safety violations cap Process at 3.0)
+        if observation_critical_failures and pillar == PillarType.PROCESS:
+            final_score = min(final_score, 3.0)
         
         # Calculate confidence based on evidence coverage
         evidence_coverage = (evidence_count / evidence_required_count * 100) if evidence_required_count > 0 else 100
         confidence = self._calculate_confidence(evidence_coverage, len(responses))
         
         return {
-            "raw_score": round(raw_score, 2),
-            "weighted_score": round(raw_score, 2),
+            "raw_score": round(combined_score, 2),
+            "weighted_score": round(combined_score, 2),
             "final_score": round(final_score, 2),
             "confidence": confidence,
             "evidence_coverage": round(evidence_coverage, 1),
-            "critical_failures": critical_failures,
-            "response_count": len(responses)
+            "critical_failures": critical_failures + observation_critical_failures,
+            "response_count": len(responses),
+            "observation_count": len(observations),
+            "interview_score": round(interview_score, 2),
+            "observation_score": round(observation_score, 2)
         }
     
     def _calculate_confidence(self, evidence_coverage: float, response_count: int) -> str:

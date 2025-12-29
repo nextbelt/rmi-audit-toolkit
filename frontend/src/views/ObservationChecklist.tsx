@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { observationAPI } from '../api/client';
 import { Button, Card } from '../components';
@@ -36,28 +36,115 @@ const CHECKLIST_TEMPLATES = {
   ],
 };
 
+const getStorageKey = (assessmentId: string) => `checklist-${assessmentId}`;
+
 export const ObservationChecklist: React.FC = () => {
   const { assessmentId } = useParams<{ assessmentId: string }>();
-  const [selectedCategory, setSelectedCategory] = useState<string>('Work Execution');
-  const [checklist, setChecklist] = useState<ChecklistItem[]>(
-    CHECKLIST_TEMPLATES['Work Execution'].map(item => ({
+  const navigate = useNavigate();
+  
+  // Store ALL categories' data in a single object
+  const [allCategoriesData, setAllCategoriesData] = useState<Record<string, ChecklistItem[]>>(() => {
+    if (!assessmentId) return {};
+    const saved = localStorage.getItem(getStorageKey(assessmentId));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.allCategories || {};
+      } catch {
+        return {};
+      }
+    }
+    return {};
+  });
+  
+  // Load saved state from localStorage on mount
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => {
+    if (!assessmentId) return 'Work Execution';
+    const saved = localStorage.getItem(getStorageKey(assessmentId));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return parsed.selectedCategory || 'Work Execution';
+      } catch {
+        return 'Work Execution';
+      }
+    }
+    return 'Work Execution';
+  });
+  
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(() => {
+    if (!assessmentId) {
+      return CHECKLIST_TEMPLATES['Work Execution'].map(item => ({
+        ...item,
+        category: 'Work Execution',
+        status: null,
+      }));
+    }
+    
+    const saved = localStorage.getItem(getStorageKey(assessmentId));
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        const categoryData = parsed.allCategories?.['Work Execution'];
+        if (categoryData) {
+          return categoryData;
+        }
+      } catch {
+        // Fall through to default
+      }
+    }
+    
+    return CHECKLIST_TEMPLATES['Work Execution'].map(item => ({
       ...item,
       category: 'Work Execution',
       status: null,
-    }))
-  );
+    }));
+  });
+  
   const [submitting, setSubmitting] = useState(false);
-  const navigate = useNavigate();
+  
+  // Save to localStorage whenever checklist or category changes
+  useEffect(() => {
+    if (assessmentId) {
+      // Update the all categories data with current checklist
+      const updatedCategories = {
+        ...allCategoriesData,
+        [selectedCategory]: checklist,
+      };
+      setAllCategoriesData(updatedCategories);
+      
+      // Save everything to localStorage
+      localStorage.setItem(getStorageKey(assessmentId), JSON.stringify({
+        selectedCategory,
+        allCategories: updatedCategories,
+      }));
+    }
+  }, [checklist, selectedCategory, assessmentId]);
 
   const handleCategoryChange = (category: string) => {
+    // Save current checklist to allCategoriesData before switching
+    const updatedCategories = {
+      ...allCategoriesData,
+      [selectedCategory]: checklist,
+    };
+    
     setSelectedCategory(category);
-    setChecklist(
-      CHECKLIST_TEMPLATES[category as keyof typeof CHECKLIST_TEMPLATES].map(item => ({
-        ...item,
-        category,
-        status: null,
-      }))
-    );
+    
+    // Load saved data for the new category if it exists
+    if (updatedCategories[category]) {
+      setChecklist(updatedCategories[category]);
+    } else {
+      // Create fresh checklist for this category
+      setChecklist(
+        CHECKLIST_TEMPLATES[category as keyof typeof CHECKLIST_TEMPLATES].map(item => ({
+          ...item,
+          category,
+          status: null,
+        }))
+      );
+    }
+    
+    setAllCategoriesData(updatedCategories);
   };
 
   const handleStatusChange = (id: string, status: 'pass' | 'fail') => {
@@ -88,23 +175,69 @@ export const ObservationChecklist: React.FC = () => {
   const handleSubmit = async () => {
     setSubmitting(true);
     try {
-      const observations = checklist
-        .filter(item => item.status !== null)
-        .map(item => ({
-          category: item.category,
-          description: item.description,
-          compliance_status: item.status === 'pass' ? 'compliant' : 'non_compliant',
-          severity: item.severity || 'low',
-          notes: item.notes || '',
-        }));
-
-      if (observations.length > 0) {
-        await observationAPI.createBatch(Number(assessmentId), observations);
+      // Collect observations from ALL categories (not just current one)
+      const allObservations: any[] = [];
+      
+      // Add current category's data
+      const currentCategoryData = {
+        ...allCategoriesData,
+        [selectedCategory]: checklist,
+      };
+      
+      // Check if ALL categories are complete
+      const incompleteCategoriesDetails: string[] = [];
+      Object.keys(CHECKLIST_TEMPLATES).forEach((categoryName) => {
+        const categoryItems = currentCategoryData[categoryName] || [];
+        const templateItems = CHECKLIST_TEMPLATES[categoryName as keyof typeof CHECKLIST_TEMPLATES];
+        const completedCount = categoryItems.filter((item: ChecklistItem) => item.status !== null).length;
+        
+        if (completedCount === 0) {
+          incompleteCategoriesDetails.push(`• ${categoryName}: 0/${templateItems.length} completed`);
+        } else if (completedCount < templateItems.length) {
+          incompleteCategoriesDetails.push(`• ${categoryName}: ${completedCount}/${templateItems.length} completed`);
+        }
+      });
+      
+      if (incompleteCategoriesDetails.length > 0) {
+        alert(
+          `⚠️ Please complete ALL categories before submitting:\n\n${incompleteCategoriesDetails.join('\n')}\n\nAll observations will auto-save as you work.`
+        );
+        setSubmitting(false);
+        return;
       }
+      
+      // Iterate through all categories and collect completed items
+      Object.entries(currentCategoryData).forEach(([categoryName, items]) => {
+        const categoryObservations = items
+          .filter((item: ChecklistItem) => item.status !== null)
+          .map((item: ChecklistItem) => ({
+            title: item.description,
+            type: categoryName,
+            pillar: 'PROCESS', // Uppercase for database enum
+            notes: item.notes || '',
+            pass_fail: item.status === 'pass',
+            severity: item.severity || 'low',
+          }));
+        allObservations.push(...categoryObservations);
+      });
 
-      navigate(`/assessment/${assessmentId}`);
-    } catch (error) {
+      if (allObservations.length > 0) {
+        console.log('Submitting observations:', allObservations);
+        const result = await observationAPI.createBatch(Number(assessmentId), allObservations);
+        console.log('Submit result:', result);
+        
+        // DO NOT clear localStorage - keep it so users can see what they submitted
+        // The data will be cleared when they start a new assessment or manually reset
+        
+        alert(`✅ Successfully submitted ${result.created_count || allObservations.length} observations!\n\nYour observations have been saved to the assessment.`);
+        navigate(`/assessment/${assessmentId}`);
+      } else {
+        alert('No observations to submit. Please mark at least one item as Pass or Fail.');
+      }
+    } catch (error: any) {
       console.error('Failed to submit observations:', error);
+      console.error('Error details:', error.response?.data);
+      alert(`❌ Failed to submit observations: ${error.response?.data?.detail || error.message || 'Unknown error'}`);
     } finally {
       setSubmitting(false);
     }
@@ -112,6 +245,17 @@ export const ObservationChecklist: React.FC = () => {
 
   const completedCount = checklist.filter(item => item.status !== null).length;
   const failCount = checklist.filter(item => item.status === 'fail').length;
+  
+  // Calculate total across all categories
+  const totalCompletedAllCategories = Object.values({
+    ...allCategoriesData,
+    [selectedCategory]: checklist,
+  }).reduce((sum, items) => sum + items.filter(item => item.status !== null).length, 0);
+  
+  const totalItemsAllCategories = Object.keys(CHECKLIST_TEMPLATES).reduce(
+    (sum, cat) => sum + CHECKLIST_TEMPLATES[cat as keyof typeof CHECKLIST_TEMPLATES].length,
+    0
+  );
 
   return (
     <div style={{ padding: '40px 24px', maxWidth: '1000px', margin: '0 auto' }}>
@@ -146,10 +290,10 @@ export const ObservationChecklist: React.FC = () => {
             color: '#0D4F4F',
             fontFamily: "'IBM Plex Mono', monospace",
           }}>
-            {completedCount}/{checklist.length}
+            {totalCompletedAllCategories}/{totalItemsAllCategories}
           </div>
           <div style={{ fontSize: '0.75rem', color: '#5C5C5C', marginTop: '4px' }}>
-            Completed
+            Completed (All Categories)
           </div>
         </Card>
         <Card style={{ padding: '24px', textAlign: 'center', background: failCount > 0 ? '#9B2C2C15' : '#F2F1EE' }}>
@@ -308,20 +452,29 @@ export const ObservationChecklist: React.FC = () => {
       </div>
 
       {/* Submit Button */}
-      <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-        <Button
-          variant="outline"
-          onClick={() => navigate(`/assessment/${assessmentId}`)}
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          loading={submitting}
-          disabled={submitting || completedCount === 0}
-        >
-          Submit {completedCount} Observation{completedCount !== 1 ? 's' : ''}
-        </Button>
+      <div style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ fontSize: '0.875rem', color: '#5C5C5C' }}>
+          {totalCompletedAllCategories === totalItemsAllCategories ? (
+            <span style={{ color: '#2D6A4F', fontWeight: 500 }}>✓ All categories complete</span>
+          ) : (
+            <span>Complete all {totalItemsAllCategories} items across all categories to submit</span>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <Button
+            variant="outline"
+            onClick={() => navigate(`/assessment/${assessmentId}`)}
+          >
+            Save & Exit
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            loading={submitting}
+            disabled={submitting || totalCompletedAllCategories !== totalItemsAllCategories}
+          >
+            Submit All {totalCompletedAllCategories} Observations
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -117,29 +117,481 @@ Each question includes:
 | **scoring_logic** | JSON rules: `{"1": "Description", "5": "Description"}` |
 | **is_critical** | Critical failures cap pillar scores |
 
-### Sample Questions (16 Pre-Loaded)
+### Complete Question Bank (16 Pre-Loaded Questions)
 
-#### People Pillar (5 questions)
-- P-01: Technician training on assigned equipment (CRITICAL, evidence required)
-- P-02: Frequency of emergency interruptions
-- P-03: Stop work authority for safety/reliability risks (CRITICAL)
-- P-04: Knowledge transfer mechanisms
-- P-05: Training budget allocation
+---
 
-#### Process Pillar (5 questions)
-- PR-01: Spare parts availability at job site (observation)
-- PR-02: SOP usage during work execution (observation)
-- PR-03: LOTO procedure compliance (CRITICAL, observation)
-- PR-04: Work order planning quality % (CRITICAL, data input)
-- PR-05: PM on-time completion % (CRITICAL, data input)
+## 👥 PEOPLE PILLAR (5 Questions)
 
-#### Technology Pillar (6 questions)
-- T-01: Data graveyard detection (generic closure codes) (CRITICAL, data input)
-- T-02: ISO 14224 taxonomy alignment (CRITICAL)
-- T-03: Bad actor report generation capability
-- T-04: CMMS usability (technician perspective)
-- T-05: Asset hierarchy depth
-- T-06: Work order attachment accessibility
+Focuses on workforce competency, empowerment, and organizational culture.
+
+---
+
+### P-01: Equipment-Specific Training (CRITICAL)
+
+**Question**: "Do you feel trained on the specific equipment you are assigned to maintain today?"
+
+**Target Role**: Technician  
+**Question Type**: Likert Scale (1-5)  
+**Weight**: 1.5 (High importance)  
+**Evidence Required**: Yes (if score ≥4)  
+**Critical Question**: Yes (failure caps People pillar at 3.0)
+
+**Scoring Rubric**:
+
+| Score | Description | Meaning |
+|-------|-------------|----------|
+| **1** | I learn by guessing / No formal training | Reactive, unsafe |
+| **2** | Some on-the-job training but inconsistent | Ad-hoc learning |
+| **3** | Basic training provided | Minimum competency |
+| **4** | Comprehensive training with documentation | Structured program |
+| **5** | Formal certification program with ongoing skill validation | World-class |
+
+**Evidence Required for Score ≥4**:  
+Training certificate, competency matrix, or formal documentation
+
+**Why It's Critical**:  
+Untrained technicians cannot perform preventive work effectively, leading to reactive maintenance spiral.
+
+---
+
+### P-02: Emergency Interruptions
+
+**Question**: "In a typical week, how many times is your scheduled work interrupted by an emergency?"
+
+**Target Role**: Technician  
+**Question Type**: Likert Scale (1-5)  
+**Weight**: 1.2  
+**Evidence Required**: No  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Description | Reactive Reality |
+|-------|-------------|------------------|
+| **1** | Daily / Constant interruptions (5+ per week) | Reactive spiral |
+| **2** | Frequent interruptions (3-4 per week) | High reactive load |
+| **3** | Occasional interruptions (1-2 per week) | Emerging preventive |
+| **4** | Rare interruptions (1-2 per month) | Preventive discipline |
+| **5** | Almost never / Scheduled work is protected | Predictive maturity |
+
+**What This Measures**:  
+The reality gap between planned vs. reactive work. High interruptions indicate poor equipment reliability.
+
+---
+
+### P-03: Stop Work Authority (CRITICAL)
+
+**Question**: "If you see a safety or reliability risk, do you feel authorized to stop production?"
+
+**Target Role**: Technician  
+**Question Type**: Binary (Yes/No)  
+**Weight**: 1.0  
+**Evidence Required**: No  
+**Critical Question**: Yes
+
+**Scoring Rubric**:
+
+| Answer | Score | Meaning |
+|--------|-------|----------|
+| **Yes** | 5 points | Empowered workforce / Strong safety culture |
+| **No** | 1 point | Authority gap / Cultural issue / Safety risk |
+
+**Why It's Critical**:  
+Lack of stop work authority indicates cultural problems that undermine all reliability efforts.
+
+---
+
+### P-04: Knowledge Transfer Mechanisms
+
+**Question**: "How is knowledge transferred from senior technicians to new hires?"
+
+**Target Role**: Manager  
+**Question Type**: Multi-Select  
+**Weight**: 1.0  
+**Evidence Required**: Yes (if score ≥4)  
+**Critical Question**: No
+
+**Answer Options**:
+- Ad-hoc shadowing only
+- Informal mentorship
+- Documented training program
+- Knowledge base / Wiki
+- Formal certification path
+- Cross-training rotations
+
+**Scoring Rubric**:
+
+| Score | Description |
+|-------|-------------|
+| **1** | Only ad-hoc shadowing (tribal knowledge) |
+| **3** | Informal mentorship + some documentation |
+| **5** | Formal program + knowledge base + certification |
+
+**Evidence Required for Score ≥4**:  
+Documentation of mentorship program, knowledge base screenshots, or training records
+
+**What This Measures**:  
+Protection against knowledge loss when experienced workers retire.
+
+---
+
+### P-05: Training Budget Allocation
+
+**Question**: "Does the maintenance budget include a dedicated line item for technician training?"
+
+**Target Role**: Manager  
+**Question Type**: Binary (Yes/No)  
+**Weight**: 0.8  
+**Evidence Required**: Yes  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Answer | Score | Meaning |
+|--------|-------|----------|
+| **Yes** | 5 points | Training is a funded priority |
+| **No** | 1 point | Training not formalized in budget |
+
+**Evidence Required**:  
+Budget spreadsheet showing training allocation
+
+**What This Measures**:  
+Organizational commitment to workforce development. No budget = no training.
+
+---
+
+## ⚙️ PROCESS PILLAR (5 Questions)
+
+Focuses on work execution, planning discipline, and procedural adherence.
+
+---
+
+### PR-01: Spare Parts Availability
+
+**Question**: "Did the technician have the correct spare part available immediately?"
+
+**Target Role**: Auditor (Observation)  
+**Question Type**: Observational  
+**Weight**: 1.3  
+**Evidence Required**: Yes  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Description | Impact |
+|-------|-------------|--------|
+| **1** | Technician had to leave area to find/order part (delay >30 min) | Work stoppage |
+| **2** | Part available in storeroom but not kitted | Inefficiency |
+| **3** | Part kitted but not at job site | Some planning |
+| **4** | Part at job site but some confusion | Good planning |
+| **5** | Kitting process had exact part ready at job site | Excellent planning |
+
+**Evidence Required**:  
+Photo of part available at job site OR note documenting delay/search time
+
+**What This Measures**:  
+Planning effectiveness. Parts kitting is a leading indicator of work order planning quality.
+
+---
+
+### PR-02: SOP Usage During Work
+
+**Question**: "Did the technician reference a Standard Operating Procedure (SOP) during the repair?"
+
+**Target Role**: Auditor (Observation)  
+**Question Type**: Observational  
+**Weight**: 1.2  
+**Evidence Required**: Yes  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Description | Risk Level |
+|-------|-------------|------------|
+| **1** | No SOP visible / Technician unaware of SOP | High risk of error |
+| **2** | SOP exists but not accessible at job site | Procedures ignored |
+| **3** | SOP referenced briefly | Minimal compliance |
+| **4** | SOP used for most steps | Strong adherence |
+| **5** | SOP followed step-by-step with sign-off | Excellent discipline |
+
+**Evidence Required**:  
+Photo of SOP in use OR note explaining why SOP was not referenced
+
+**What This Measures**:  
+Process discipline. Work quality suffers without procedure adherence.
+
+---
+
+### PR-03: LOTO Procedure Compliance (CRITICAL)
+
+**Question**: "Was the Lock-Out/Tag-Out (LOTO) procedure correctly applied before work started?"
+
+**Target Role**: Auditor (Observation)  
+**Question Type**: Binary (Pass/Fail)  
+**Weight**: 2.0 (Highest weight - safety critical)  
+**Evidence Required**: Yes  
+**Critical Question**: Yes (CRITICAL FAIL)
+
+**Scoring Rubric**:
+
+| Answer | Score | Consequence |
+|--------|-------|-------------|
+| **Pass** | 5 points | Safety protocol followed |
+| **Fail** | 1 point | **CRITICAL FAIL - Automatic Process pillar cap at 3.0** |
+
+**Evidence Required**:  
+Photo of LOTO application or safety permit
+
+**Why It's Critical**:  
+LOTO violations are life-threatening. A single failure invalidates all other process scores.
+
+---
+
+### PR-04: Job Plan Quality (CRITICAL)
+
+**Question**: "What percentage of Work Orders have a detailed Job Plan attached?"
+
+**Target Role**: Planner  
+**Question Type**: Data Input (%)  
+**Weight**: 1.4  
+**Evidence Required**: Yes  
+**Critical Question**: Yes
+
+**Scoring Rubric**:
+
+| Score | % WOs with Job Plans | Maturity Level |
+|-------|---------------------|----------------|
+| **1** | <10% (just headers) | No planning discipline |
+| **2** | 10-30% (basic plans) | Emerging planning |
+| **3** | 30-60% | Inconsistent planning |
+| **4** | 60-90% (detailed plans) | Strong planning |
+| **5** | >90% (comprehensive plans with steps/parts/safety) | World-class planning |
+
+**Evidence Required**:  
+CMMS report showing % of WOs with job plans, or sample of 20 WOs
+
+**Why It's Critical**:  
+Job plans are the foundation of planned maintenance. <30% caps Process pillar at 3.0.
+
+---
+
+### PR-05: PM Compliance Rate (CRITICAL)
+
+**Question**: "Are Preventive Maintenance (PM) tasks completed within their scheduled window?"
+
+**Target Role**: Planner  
+**Question Type**: Data Input (%)  
+**Weight**: 1.3  
+**Evidence Required**: Yes  
+**Critical Question**: Yes
+
+**Scoring Rubric**:
+
+| Score | On-Time PM % | Discipline Level |
+|-------|--------------|------------------|
+| **1** | <50% | No PM discipline (reactive spiral) |
+| **2** | 50-70% | Struggling to keep up |
+| **3** | 70-85% | Acceptable compliance |
+| **4** | 85-95% | Strong discipline |
+| **5** | >95% (with documented exceptions) | Exceptional discipline |
+
+**Evidence Required**:  
+CMMS PM compliance report showing on-time completion %
+
+**Why It's Critical**:  
+PM compliance is the heartbeat of reliability. Low compliance = equipment degradation.
+
+---
+
+## 💻 TECHNOLOGY PILLAR (6 Questions)
+
+Focuses on CMMS data quality, system usability, and technology enablement.
+
+---
+
+### T-01: Data Graveyard Detection (CRITICAL)
+
+**Question**: "Random Sampling: Pull 50 closed work orders. How many have generic closure codes like 'DONE' or 'FIXED'?"
+
+**Target Role**: Auditor  
+**Question Type**: Data Input (count)  
+**Weight**: 1.5  
+**Evidence Required**: Yes  
+**Critical Question**: Yes
+
+**Scoring Rubric**:
+
+| Score | # WOs with Generic Codes | Data Quality |
+|-------|-------------------------|---------------|
+| **1** | >20 WOs (>40%) | **SEVERE DATA GRAVEYARD** - Cannot perform RCA |
+| **2** | 10-20 WOs (20-40%) | Poor data quality |
+| **3** | 5-10 WOs (10-20%) | Acceptable data quality |
+| **4** | 2-5 WOs (4-10%) | Good data quality |
+| **5** | <2 WOs (<4%) | High data quality |
+
+**Evidence Required**:  
+Screenshot of CMMS export showing closure codes or Excel analysis
+
+**Why It's Critical**:  
+>40% generic codes means you cannot identify failure patterns. Caps Technology pillar at 2.0.
+
+**What to Look For**:
+- "DONE"
+- "FIXED"
+- "OK"
+- "COMPLETE"
+- "REPLACED PART"
+- Notes <10 characters
+
+---
+
+### T-02: ISO 14224 Taxonomy Alignment (CRITICAL)
+
+**Question**: "Do failure codes align with ISO 14224 taxonomy (Component - Failure Mode - Cause)?"
+
+**Target Role**: Auditor  
+**Question Type**: Binary (Yes/No)  
+**Weight**: 1.2  
+**Evidence Required**: Yes  
+**Critical Question**: Yes
+
+**Scoring Rubric**:
+
+| Answer | Score | Data Structure |
+|--------|-------|----------------|
+| **Yes** | 5 points | Structured, analyzable data (can perform RCA) |
+| **No** | 1 point | Unstructured data / Cannot perform Root Cause Analysis |
+
+**Evidence Required**:  
+Screenshot of failure code structure in CMMS or data export
+
+**ISO 14224 Taxonomy Structure**:
+```
+Component (What failed)
+  └─ Failure Mode (How it failed)
+      └─ Failure Cause (Why it failed)
+
+Example:
+  Pump Seal ← Component
+    └─ External Leakage ← Failure Mode
+        └─ Wear Out ← Failure Cause
+```
+
+**Why It's Critical**:  
+Without structured failure taxonomy, you cannot identify root causes or prevent recurrence.
+
+---
+
+### T-03: Bad Actor Reporting Capability
+
+**Question**: "Can you generate a 'Bad Actor' report (Top 10 failing assets) in under 5 minutes?"
+
+**Target Role**: Manager  
+**Question Type**: Observational  
+**Weight**: 1.0  
+**Evidence Required**: Yes  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Description | System Capability |
+|-------|-------------|-------------------|
+| **1** | No - Must export to Excel and manually analyze | No reporting capability |
+| **2** | Requires custom SQL or IT support | IT-dependent |
+| **3** | Possible but requires 15-30 minutes | Cumbersome |
+| **4** | Can generate in 5-10 minutes | Good capability |
+| **5** | Yes - One-click dashboard available | Excellent capability |
+
+**Evidence Required**:  
+Screenshot of report OR timer evidence showing time to generate
+
+**What This Measures**:  
+CMMS reporting maturity. Can managers get actionable data quickly?
+
+---
+
+### T-04: CMMS Usability
+
+**Question**: "Rate the difficulty of entering data into the current CMMS."
+
+**Target Role**: Technician  
+**Question Type**: Likert Scale (1-5)  
+**Weight**: 0.8  
+**Evidence Required**: No  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Description | User Experience |
+|-------|-------------|------------------|
+| **1** | Extremely frustrating / I avoid it when possible | System rejection |
+| **2** | Difficult - Too many fields/steps | High friction |
+| **3** | Acceptable - Some friction | Tolerable |
+| **4** | Easy - Straightforward process | Good UX |
+| **5** | Seamless - Mobile-friendly, intuitive | Excellent UX |
+
+**What This Measures**:  
+User adoption. Difficult systems = poor data quality (garbage in, garbage out).
+
+---
+
+### T-05: Asset Hierarchy Depth
+
+**Question**: "What is the asset hierarchy depth in the CMMS?"
+
+**Target Role**: Auditor  
+**Question Type**: Data Input (levels)  
+**Weight**: 1.0  
+**Evidence Required**: Yes  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Hierarchy Depth | Structure Quality |
+|-------|----------------|-------------------|
+| **1** | Flat (1-2 levels) | No functional hierarchy |
+| **2** | Basic (3 levels) | Site > Area > Equipment |
+| **3** | Good (4 levels) | Site > Area > System > Equipment |
+| **4** | Comprehensive (5 levels) | Includes components |
+| **5** | ISO 14224 compliant (5+ levels) | Down to failure mode level |
+
+**Evidence Required**:  
+Screenshot of asset hierarchy or CMMS structure export
+
+**Ideal Structure**:
+```
+Site (Plant 1)
+  └─ Area (Finishing Department)
+      └─ System (Conveyor Line A)
+          └─ Equipment (Motor 304A)
+              └─ Component (Bearing)
+```
+
+---
+
+### T-06: Work Order Attachments Accessibility
+
+**Question**: "Are work order attachments (photos, manuals) easily accessible from the CMMS?"
+
+**Target Role**: Technician  
+**Question Type**: Likert Scale (1-5)  
+**Weight**: 0.9  
+**Evidence Required**: No  
+**Critical Question**: No
+
+**Scoring Rubric**:
+
+| Score | Description | Information Access |
+|-------|-------------|--------------------|
+| **1** | No attachment capability or never used | No knowledge capture |
+| **2** | Possible but cumbersome | Rarely used |
+| **3** | Available but not consistently used | Inconsistent adoption |
+| **4** | Easy to access, commonly used | Good adoption |
+| **5** | Integrated with mobile access, widely adopted | Excellent adoption |
+
+**What This Measures**:  
+Knowledge retention. Photos and manuals at point-of-work improve quality and speed.
 
 ---
 
@@ -158,16 +610,22 @@ ROLE_WEIGHTS = {
 # 2. Question Weighting
 weighted_score = Σ(response_score × role_weight × question_weight) / Σ(weights)
 
-# 3. Evidence Lock
+# 3. Filter Draft and N/A Responses
+responses = responses.filter(
+    QuestionResponse.is_draft == False,
+    QuestionResponse.is_na == False
+)
+
+# 4. Evidence Lock
 if question.evidence_required and score >= 4:
     if not evidence_provided:
         score = min(score, 3)  # Cap at 3
 
-# 4. Weakest Link Logic
+# 5. Weakest Link Logic
 if any critical_question.score <= 2:
     pillar_score = min(pillar_score, 3.0)
 
-# 5. Overall RMI
+# 6. Overall RMI
 RMI = (People_Score + Process_Score + Technology_Score) / 3
 ```
 
@@ -353,6 +811,61 @@ All evidence auto-linked to:
 - Client-specific cover page
 - Professional color scheme (blues, grays)
 - Board-ready formatting
+
+---
+
+## 🆕 Data Saving & UX Improvements (Dec 2024)
+
+### Draft Response System
+
+All question responses now support **draft mode**:
+
+```python
+class QuestionResponse:
+    is_draft = Column(Boolean, default=False)  # Autosaved drafts
+    is_na = Column(Boolean, default=False)     # Not Applicable
+```
+
+**Autosave Logic:**
+- Drafts save automatically 1 second after typing stops
+- Only final responses (is_draft=False) count toward RMI score
+- Scoring engine filters: `WHERE is_draft = False AND is_na = False`
+
+### N/A (Not Applicable) Handling
+
+Questions can be marked as "Not Applicable":
+- Checkbox disables answer fields and score buttons
+- Excluded from scoring calculations entirely
+- Useful for questions irrelevant to specific facilities
+- Example: Predictive maintenance questions for small sites without PdM
+
+### Evidence Validation Enforcement
+
+**Before submission**, the UI now blocks high scores without evidence:
+
+```typescript
+if (score >= 4 && evidence_required && !has_evidence && !is_na) {
+  setValidationError('⚠️ Evidence is required for scores ≥4');
+  return; // Block submission
+}
+```
+
+This prevents the need for post-audit score downgrades.
+
+### Offline Queue Management
+
+For field work in basements or remote sites:
+- Network errors automatically queue requests to localStorage
+- Auto-sync when connection restored
+- Shows pending queue count in dashboard
+- Manual retry button for failed requests
+
+### Safari Compatibility
+
+Full support for macOS/iOS Safari:
+- `withCredentials: true` for cross-origin requests
+- CORS headers: `expose_headers=["*"]`, `max_age=3600`
+- Tested on Safari 17+ and iOS Safari
 
 ---
 
@@ -711,7 +1224,7 @@ else:
         {
           "question_code": "P-01",
           "score": 2,
-          "question": "Do you feel trained on the specific equipment..."
+          "question": "Do you feel trained on the specific equipment you are assigned to maintain today?"
         }
       ]
     },
@@ -731,7 +1244,7 @@ else:
         {
           "question_code": "T-01",
           "score": 1,
-          "question": "Random Sampling: Pull 50 closed work orders..."
+          "question": "Random Sampling: Pull 50 closed work orders. How many have generic closure codes like 'DONE' or 'FIXED'?"
         }
       ]
     }
