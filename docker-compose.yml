@@ -1,0 +1,79 @@
+name: rmi-audit-toolkit
+
+# ── Dev-only compose file ───────────────────────────────────────────────────
+# Both services use bind-mounts so every file save is reflected immediately:
+#   • Backend  → uvicorn --reload on :8000
+#   • Frontend → vite dev (HMR) on :3000
+#
+# Usage:
+#   make up            build images (first time) then start both
+#   make logs          tail logs from both containers
+#   make stop          stop containers (keeps volumes)
+#   make destroy       stop + remove containers, networks, and the db volume
+#   make shell-be      bash shell inside the backend container
+#   make shell-fe      sh shell inside the frontend container
+#   make test          run pytest inside the backend container
+
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: rmi-backend-dev
+    container_name: rmi-backend
+    working_dir: /app
+    # Bind-mount backend/ so uvicorn --reload picks up every save
+    volumes:
+      - ./backend:/app
+      - db-data:/app/db         # SQLite lives here so it survives restarts
+      - uploads:/app/uploads
+      - reports:/app/reports
+    ports:
+      - "8000:8000"
+    environment:
+      # Loaded from .env at the repo root (copy .env.example → .env)
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////app/db/rmi_dev.db}
+      SECRET_KEY: ${SECRET_KEY:-dev-only-secret-change-before-production}
+      ENVIRONMENT: development
+      FRONTEND_URL: http://localhost:3000
+      UPLOAD_DIR: /app/uploads
+      REPORT_OUTPUT_DIR: /app/reports
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}
+      SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: rmi-frontend-dev
+    container_name: rmi-frontend
+    working_dir: /app
+    # Bind-mount frontend/src so Vite HMR picks up every save.
+    # node_modules is kept inside the container (not overwritten by the bind-mount)
+    # via the anonymous volume trick below.
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules         # prevent host node_modules from shadowing the container's
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_URL: ""            # empty → falls back to Vite's proxy (/ api → :8000)
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  db-data:      # persists SQLite database across container restarts
+  uploads:      # persists uploaded evidence files
+  reports:      # persists generated PDF reports

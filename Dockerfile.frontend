@@ -1,0 +1,21 @@
+# ── Frontend dev image ─────────────────────────────────────────────────────
+# Node 20 LTS on Ubuntu 22.04 — matches Nixpacks build on Railway.
+# Runs `vite dev` with HMR (hot module replacement) exposed on port 3000.
+# The entire frontend/ directory is bind-mounted at runtime so changes to
+# any .tsx / .ts / .css file are reflected in the browser instantly.
+
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+# Install deps (layer-cached; only rebuilds when package files change)
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --prefer-offline
+
+# The frontend/ source is mounted at /app by docker-compose, so no COPY needed.
+
+ENV NODE_ENV=development
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

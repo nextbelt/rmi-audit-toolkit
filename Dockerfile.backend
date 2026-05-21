@@ -1,0 +1,44 @@
+# ── Backend dev image ──────────────────────────────────────────────────────
+# Ubuntu 22.04 + Python 3.11 — matches the Railway runtime exactly.
+# Runs uvicorn with --reload so any file save restarts the server instantly.
+# The entire backend/ directory is bind-mounted at runtime (see docker-compose.yml)
+# so the image only needs to install dependencies.
+
+FROM ubuntu:22.04
+
+# Prevent tzdata interactive prompt
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System deps
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        python3.11 \
+        python3.11-dev \
+        python3-pip \
+        python3.11-venv \
+        # python-magic backend
+        libmagic1 \
+        # psycopg2 build (not needed for SQLite, but keeps parity with prod)
+        libpq-dev \
+        gcc \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make python3.11 the default python / pip
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.11 1 \
+ && update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 \
+ && python -m pip install --upgrade pip --quiet
+
+WORKDIR /app
+
+# Install Python deps (layer-cached; only rebuilds when requirements change)
+COPY backend/requirements.txt backend/requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
+
+# The backend/ source is mounted at /app by docker-compose, so no COPY needed.
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+
+EXPOSE 8000
+
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
