@@ -87,30 +87,7 @@ jobs:
           SECRET_KEY: ${{ env.CI_SECRET_KEY }}
           ENVIRONMENT: development
           DATABASE_URL: ${{ env.CI_DATABASE_URL }}
-        run: |
-          python - <<'EOF'
-          from database import engine, Base
-          import models, models_v2, models_extra
-          Base.metadata.create_all(bind=engine)
-          from sqlalchemy.orm import Session
-          from models import User, Assessment, AssessmentStatus
-          import bcrypt, datetime
-          with Session(engine) as s:
-              u = User(
-                  email="v1gate@ci.test",
-                  hashed_password=bcrypt.hashpw(b"V1Gate123!", bcrypt.gensalt()).decode(),
-                  role="auditor", is_active=True,
-              )
-              s.add(u); s.flush()
-              a = Assessment(
-                  client_name="CI Corp", site_name="Plant 0",
-                  assessment_date=datetime.datetime.utcnow(),
-                  creator_id=u.id, status=AssessmentStatus.DRAFT,
-              )
-              s.add(a); s.commit(); s.refresh(a)
-              assert a.id is not None, "V1 Assessment did not persist"
-              print(f"V1 Assessment round-trip OK (id={a.id})")
-          EOF
+        run: pytest tests/test_legacy_platform.py -v --tb=short
 
   bandit-scan:
     name: Bandit Code Security Scan
@@ -189,37 +166,15 @@ jobs:
         env:
           SECRET_KEY: ${{ env.CI_SECRET_KEY }}
           ENVIRONMENT: development
-          DATABASE_URL: sqlite:///ci_fwd.db
-        run: |
-          cd backend
-          python - <<'EOF'
-          from database import engine, Base
-          import models, models_v2, models_extra
-          Base.metadata.create_all(bind=engine)
-          from sqlalchemy import inspect
-          tables = inspect(engine).get_table_names()
-          print(f"Created {len(tables)} tables: {sorted(tables)}")
-          assert len(tables) >= 20, f"Expected >= 20 tables, got {len(tables)}"
-          EOF
+          DATABASE_URL: ${{ env.CI_DATABASE_URL }}
+        run: pytest backend/tests/test_migrations.py::test_forward_migration_creates_all_tables -v --tb=short
 
       - name: Rollback + recreate — idempotency check
         env:
           SECRET_KEY: ${{ env.CI_SECRET_KEY }}
           ENVIRONMENT: development
-          DATABASE_URL: sqlite:///ci_fwd.db
-        run: |
-          cd backend
-          python - <<'EOF'
-          from database import engine, Base
-          import models, models_v2, models_extra
-          Base.metadata.drop_all(bind=engine)
-          Base.metadata.create_all(bind=engine)
-          from sqlalchemy import inspect
-          tables = inspect(engine).get_table_names()
-          print(f"Post-rollback table count: {len(tables)}")
-          assert len(tables) >= 20, f"Drop/recreate produced only {len(tables)} tables"
-          print("Migration idempotency check passed")
-          EOF
+          DATABASE_URL: ${{ env.CI_DATABASE_URL }}
+        run: pytest backend/tests/test_migrations.py::test_rollback_and_recreate_is_idempotent -v --tb=short
 
   # ── 3. CRITICAL JOBS (both need: migration-tests) ────────────────────────
 
