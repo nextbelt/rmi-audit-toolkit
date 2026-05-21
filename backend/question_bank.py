@@ -24,6 +24,12 @@ def seed_question_bank(db: Session):
             "weight": 1.5,  # High weight - critical question
             "evidence_required": True,
             "evidence_description": "If score >3: Training certificate, competency matrix, or formal documentation",
+            "iso_55001_clause": "7.2",
+            "iso_55001_mapping": {
+                "clause": "7.2",
+                "clause_name": "Competence",
+                "rationale": "Training and competency evidence are required for reliable asset management"
+            },
             "scoring_logic": {
                 "1": "I learn by guessing / No formal training",
                 "2": "Some on-the-job training but inconsistent",
@@ -212,6 +218,12 @@ def seed_question_bank(db: Session):
             "weight": 1.3,
             "evidence_required": True,
             "evidence_description": "CMMS PM compliance report showing on-time completion %",
+            "iso_55001_clause": "8.1",
+            "iso_55001_mapping": {
+                "clause": "8.1",
+                "clause_name": "Operational Planning and Control",
+                "rationale": "PM compliance reflects execution discipline of operational plans"
+            },
             "scoring_logic": {
                 "1": "<50% PMs completed on time",
                 "2": "50-70% on time",

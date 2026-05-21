@@ -60,8 +60,17 @@ def main():
     # Add questions
     added = 0
     for q in QUESTIONS:
-        print(f"Adding {q['question_code']}: {q['question_text'][:60]}...")
-        response = requests.post(f"{API_URL}/questions", json=q, headers=headers)
+        payload = q.copy()
+        # Normalize enum values to match API (expects uppercase)
+        if payload.get("pillar"):
+            payload["pillar"] = payload["pillar"].upper()
+        if payload.get("question_type"):
+            payload["question_type"] = payload["question_type"].upper()
+        if payload.get("target_role"):
+            payload["target_role"] = payload["target_role"].upper()
+
+        print(f"Adding {payload['question_code']}: {payload['question_text'][:60]}...")
+        response = requests.post(f"{API_URL}/questions", json=payload, headers=headers)
         
         if response.status_code in [200, 201]:
             added += 1

@@ -223,7 +223,7 @@ Lack of stop work authority indicates cultural problems that undermine all relia
 **Scoring Rubric**:
 
 | Score | Description |
-|-------|-------------|
+|-------|-------------| 
 | **1** | Only ad-hoc shadowing (tribal knowledge) |
 | **3** | Informal mentorship + some documentation |
 | **5** | Formal program + knowledge base + certification |
@@ -600,34 +600,59 @@ Knowledge retention. Photos and manuals at point-of-work improve quality and spe
 ### The Scoring Algorithm
 
 ```python
-# 1. Role-Weighted Scoring
+# 1. Role-Weighted Scoring (within interview responses)
 ROLE_WEIGHTS = {
-    "technician": 0.60,  # Ground truth
-    "manager": 0.20,     # Intent
-    "auditor": 0.20      # Verification (observations + data)
+    "technician": 0.60,  # Ground truth - what's really happening
+    "supervisor": 0.10,  # First-line leadership
+    "manager": 0.20,     # Intent - what they think is happening
+    "planner": 0.10,     # Planning perspective
+    "auditor": 0.20      # Verification - observations & data
 }
 
-# 2. Question Weighting
-weighted_score = Σ(response_score × role_weight × question_weight) / Σ(weights)
+# 2. Interview Score Calculation
+interview_score = Σ(response_score × role_weight × question_weight) / Σ(weights)
 
-# 3. Filter Draft and N/A Responses
+# 3. Observation Score Calculation
+# Pass = 5 points, Fail = 1 point
+observation_score = average(observation_scores)
+
+# 4. Combined Pillar Score (80/20 split when both exist)
+if has_interviews and has_observations:
+    pillar_score = (interview_score * 0.80) + (observation_score * 0.20)
+# Technology pillar with CMMS data: 60/20/20 split
+if pillar == TECHNOLOGY and has_cmms_data:
+    pillar_score = (interview_score * 0.60) + (observation_score * 0.20) + (cmms_score * 0.20)
+
+# 5. Filter Draft and N/A Responses
 responses = responses.filter(
     QuestionResponse.is_draft == False,
     QuestionResponse.is_na == False
 )
 
-# 4. Evidence Lock
+# 6. Evidence Lock
 if question.evidence_required and score >= 4:
     if not evidence_provided:
         score = min(score, 3)  # Cap at 3
 
-# 5. Weakest Link Logic
+# 7. Weakest Link Logic
 if any critical_question.score <= 2:
     pillar_score = min(pillar_score, 3.0)
+if safety_observation_failure and pillar == PROCESS:
+    pillar_score = min(pillar_score, 3.0)
+if cmms_score < 2.0 and pillar == TECHNOLOGY:
+    pillar_score = min(pillar_score, 3.5)
 
-# 6. Overall RMI
+# 8. Overall RMI
 RMI = (People_Score + Process_Score + Technology_Score) / 3
 ```
+
+### Scoring Weight Summary
+
+| Component | People | Process | Technology |
+|-----------|--------|---------|------------|
+| Interview Responses | 80% (or 100% if no observations) | 80% (or 100% if no observations) | 60% (with CMMS) / 80% (without CMMS) |
+| Field Observations | 20% | 20% | 20% |
+| CMMS Data Analysis | N/A | N/A | 20% (when uploaded) |
 
 ### Maturity Levels
 
@@ -647,7 +672,190 @@ RMI = (People_Score + Process_Score + Technology_Score) / 3
 
 ---
 
-## 🔬 Data Analysis Module (The "Data Cruncher")
+## � Strategic Evolution: Advanced Analytics
+
+The RMI Assessment Platform has been upgraded from snapshot auditing to **dynamic, risk-adjusted maturity tracking**. These advanced features provide deeper insights into organizational reliability culture and enable continuous improvement tracking.
+
+### 1. Confidence Variance (Cultural Blind Spot Detection)
+
+**Purpose**: Detect "cultural disconnects" where different organizational levels have vastly different perceptions of the same processes.
+
+**How It Works**:
+```python
+# For each question, calculate standard deviation across role responses
+variance = stdev(scores_per_question)
+
+# Flag cultural disconnect if SD > 1.5
+CULTURAL_DISCONNECT_THRESHOLD = 1.5
+
+# Example output:
+{
+    "question_code": "P-01",
+    "standard_deviation": 1.8,
+    "highest_score_role": "manager",
+    "lowest_score_role": "technician",
+    "gap": 2.5,
+    "recommendation": "Investigate perception gap between manager and technician"
+}
+```
+
+**Use Case**: If managers score training at 4.5 but technicians score it at 2.0, there's a cultural blind spot that needs investigation.
+
+### 2. Maturity Velocity (Temporal Analysis)
+
+**Purpose**: Track how RMI changes over time to identify improvement trends or sustainability risks.
+
+**How It Works**:
+```python
+# Compare current RMI to previous assessment for same site
+velocity = (Current_RMI - Previous_RMI) / Months_Between
+
+# Trend classification:
+# > 0.3: "Rapid Improvement"
+# > 0: "Improving"
+# < -0.3: "Rapid Decline"
+# < 0: "Declining"
+
+# Sustainability risk flagged if:
+# - Previous RMI >= 4.0 and current dropped by > 0.5
+# - Negative velocity after recent improvement
+```
+
+**Use Case**: A site that improved from 2.5 to 4.0 but then dropped to 3.2 has a sustainability risk - the improvement wasn't institutionalized.
+
+### 3. ISO 55001 Alignment Mapping
+
+**Purpose**: Map RMI questions and scores directly to ISO 55001 clauses for certification readiness assessment.
+
+**Clause Mappings**:
+```python
+ISO_55001_MAPPINGS = {
+    "PEOPLE": "7.2",      # Competence
+    "PROCESS": "8.1",     # Operational Planning and Control
+    "TECHNOLOGY": "7.5"   # Information Requirements
+}
+```
+
+**Gap Analysis Output**:
+```python
+{
+    "iso_clause": "7.2",
+    "iso_clause_name": "Competence",
+    "compliance_score": 72.5,
+    "gap_count": 3,
+    "gaps": [
+        {"question_code": "P-01", "score": 2, "severity": "Major"},
+        ...
+    ],
+    "certification_readiness": "Needs Work"  # Ready / Needs Work / Not Ready
+}
+```
+
+### 4. Actionability Index (Semantic Quality Check)
+
+**Purpose**: Replace simple character-count data quality checks with intelligent semantic analysis.
+
+**How It Works**:
+```python
+# Detect semantic entities in work order closure notes:
+# - [Component]: pump, motor, valve, bearing, etc.
+# - [Failure Mode]: leak, worn, damaged, vibration, etc.
+# - [Corrective Action]: replaced, repaired, adjusted, etc.
+
+# Score per work order (0-3 based on entities detected)
+# Actionability Index = weighted average across all WOs
+
+# Quality levels:
+# High (3 entities): "Replaced worn bearing on pump P-101 due to vibration"
+# Medium (2 entities): "Replaced bearing on pump"
+# Low (1 entity): "Fixed pump"
+# Poor (0 entities): "Done"
+```
+
+**Use Case**: "Fixed" vs "Replaced worn seal on hydraulic pump due to leakage" - the latter enables root cause analysis.
+
+### 5. Risk-Adjusted Weighting
+
+**Purpose**: Automatically increase the weight of Process pillar and safety-related questions for high-risk industries.
+
+**Configuration**:
+```python
+# Site criticality multiplier (stored in Assessment model)
+site_criticality = 1.0 to 2.0
+
+# High-risk industries that get increased weighting
+HIGH_RISK_INDUSTRIES = [
+    "oil & gas", "oil and gas", "chemical", 
+    "nuclear", "mining", "refinery"
+]
+
+# Application:
+if is_high_risk_industry:
+    process_pillar_weight *= site_criticality
+```
+
+**Use Case**: A nuclear plant assessment automatically weights LOTO compliance and Process pillar higher than a consumer goods facility.
+
+### Strategic Evolution JSON Response Schema
+
+```json
+{
+    "assessment_id": 1,
+    "pillar_scores": {...},
+    "overall_rmi": 3.75,
+    "maturity_level": "Level 3 - Preventive",
+    "calculated_at": "2025-01-15T10:30:00",
+    
+    "confidence_variance": {
+        "PEOPLE": {
+            "average_variance": 1.2,
+            "has_cultural_disconnect": true,
+            "cultural_disconnects": [
+                {
+                    "question_code": "P-01",
+                    "standard_deviation": 1.8,
+                    "highest_score_role": "manager",
+                    "lowest_score_role": "technician",
+                    "gap": 2.5
+                }
+            ]
+        }
+    },
+    
+    "maturity_velocity": {
+        "velocity": 0.15,
+        "velocity_per_year": 1.8,
+        "rmi_change": 0.45,
+        "previous_rmi": 3.30,
+        "current_rmi": 3.75,
+        "trend": "Improving",
+        "sustainability_risk": false
+    },
+    
+    "iso_gap_analysis": {
+        "PEOPLE": {
+            "iso_clause": "7.2",
+            "compliance_score": 80.0,
+            "certification_readiness": "Ready"
+        },
+        "PROCESS": {
+            "iso_clause": "8.1",
+            "compliance_score": 65.0,
+            "certification_readiness": "Needs Work"
+        }
+    },
+    
+    "risk_adjusted": {
+        "site_criticality": 1.5,
+        "is_high_risk_industry": true,
+        "industry": "Oil & Gas"
+    }
+}
+```
+
+---
+
+## �🔬 Data Analysis Module (The "Data Cruncher")
 
 ### Automated CMMS Metrics
 
@@ -674,14 +882,45 @@ Score mapping:
 5: >95% on-time
 ```
 
-#### 3. Data Graveyard Index
+#### 3. Data Graveyard Index (Semantic Quality Check)
 ```python
-graveyard_% = (generic_closure_codes + notes<10_chars) / total_WOs
+# NEW: Actionability Index with semantic entity detection
+# Detects: [Component] + [Failure Mode] + [Corrective Action]
+
+# Component patterns: pump, motor, valve, bearing, sensor, etc.
+# Failure patterns: leak, worn, damaged, vibration, crack, etc.
+# Action patterns: replaced, repaired, adjusted, calibrated, etc.
+
+# Entity scoring per work order:
+# 3 entities = High quality (100 points)
+# 2 entities = Medium quality (66 points)
+# 1 entity = Low quality (33 points)
+# 0 entities = Poor quality (0 points)
+
+actionability_index = weighted_average(entity_scores)
 
 Score mapping:
-1: >40% poor quality (CANNOT PERFORM RCA)
-3: 10-20% poor quality
-5: <4% poor quality
+1: <20% actionability (CANNOT PERFORM RCA)
+2: 20-40% actionability
+3: 40-60% actionability
+4: 60-80% actionability
+5: >80% actionability (HIGH SEMANTIC DATA QUALITY)
+
+# Output includes:
+{
+    "actionability_index": 72.5,
+    "quality_breakdown": {
+        "high_quality_3_entities": 150,
+        "medium_quality_2_entities": 200,
+        "low_quality_1_entity": 100,
+        "poor_quality_0_entities": 50
+    },
+    "semantic_coverage": {
+        "with_component": 350,
+        "with_failure_mode": 280,
+        "with_corrective_action": 300
+    }
+}
 ```
 
 #### 4. Bad Actor Detection
@@ -1519,6 +1758,79 @@ This platform is designed to evolve. Future enhancements may include:
 - ✅ Evidence requirements enforced
 - ✅ Audit trail for regulatory review
 - ✅ Defensible methodology (role-weighted, evidence-based)
+
+---
+
+## 🌐 Browser Compatibility
+
+### Safari-Specific Configuration
+
+The system includes specific CORS and credential handling for Safari compatibility:
+
+**Backend (main.py):**
+- `expose_headers=["*"]` - Allows Safari to access response headers
+- `max_age=3600` - Caches preflight requests for 1 hour
+- `allow_credentials=True` - Enables cookie/session handling
+
+**Frontend (client.ts):**
+- `withCredentials: true` - Sends credentials with cross-origin requests
+- 30-second timeout for slow connections
+
+**Common Safari Issues:**
+1. **Intelligent Tracking Prevention (ITP)** - May block cookies; users can disable in Safari Preferences → Privacy
+2. **Mixed Content** - Ensure both frontend and backend use HTTPS in production
+3. **LocalStorage Restrictions** - Safari blocks localStorage in some privacy modes
+
+---
+
+## 💾 Data Saving & Offline Support
+
+### Autosave System
+
+- **1-second debounce**: Saves draft after user stops typing for 1 second
+- **Draft flag**: Responses marked as `is_draft: true` are excluded from scoring
+- **Visual feedback**: Shows "💾 Saving draft..." and "✓ Draft saved at HH:MM:SS"
+
+### Offline Queue Management
+
+For field work in areas with poor connectivity:
+1. **Offline Detection**: Network errors automatically detected
+2. **Local Storage**: Failed requests saved to localStorage
+3. **Auto-Sync**: When connection restored, pending requests automatically sent
+4. **Manual Retry**: Dashboard shows pending queue count
+
+### N/A (Not Applicable) Handling
+
+Questions can be marked as "Not Applicable":
+- Checkbox disables answer fields and score buttons
+- Excluded from scoring calculations entirely
+- Useful for questions irrelevant to specific facilities
+
+---
+
+## 🔒 Assessment Lifecycle
+
+### Status Flow
+
+```
+DRAFT → IN_PROGRESS → REVIEW → COMPLETED (Finalized) → ARCHIVED
+```
+
+### Finalization System
+
+When an assessment is finalized:
+- 🔒 **Interview responses locked** - Cannot edit or add new answers
+- 🔒 **Observations locked** - Cannot add new field observations
+- 🔒 **CMMS data locked** - Cannot upload new CMMS files
+- ✅ **Report becomes final** - Official deliverable
+- ⚠️ **PERMANENT** - Cannot be undone without admin database access
+
+### Upsert Logic (Duplicate Prevention)
+
+The system uses upsert logic to prevent duplicate responses:
+- If a response exists for a question → **Updates the existing record**
+- If no response exists → **Creates a new record**
+- Result: **Only 1 response per question** per assessment
 
 ---
 

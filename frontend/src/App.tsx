@@ -3,11 +3,9 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './api/store';
 import {
   Login,
-  Dashboard,
-  InterviewInterface,
-  ObservationChecklist,
-  AssessmentDetail,
   UserManagement,
+  DashboardV2,
+  AssessmentV2Detail,
 } from './views';
 import './styles/global.css';
 
@@ -27,13 +25,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout } = useAuthStore();
 
   return (
-    <div>
+    <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
       {/* Header */}
       <header style={{
-        background: 'rgba(250, 250, 248, 0.95)',
-        backdropFilter: 'blur(10px)',
-        borderBottom: '1px solid #E5E4E0',
-        padding: '16px 0',
+        background: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid #E5E5E5',
+        padding: '12px 0',
         position: 'sticky',
         top: 0,
         zIndex: 1000,
@@ -59,9 +57,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
               </h1>
             </a>
             <span style={{
-              fontSize: '0.75rem',
-              color: '#8A8A8A',
+              fontSize: '0.7rem',
+              color: '#999999',
               fontFamily: "'IBM Plex Mono', monospace",
+              letterSpacing: '0.04em',
             }}>
               by NextBelt LLC
             </span>
@@ -69,18 +68,19 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
           {user && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-              <nav style={{ display: 'flex', gap: '16px' }}>
+              <nav style={{ display: 'flex', gap: '20px' }}>
                 <a 
                   href="/dashboard" 
                   style={{
-                    fontSize: '0.875rem',
+                    fontSize: '0.8125rem',
                     fontWeight: 500,
-                    color: '#5C5C5C',
+                    color: '#666666',
                     textDecoration: 'none',
-                    transition: 'color 0.2s ease'
+                    transition: 'color 0.15s ease',
+                    letterSpacing: '0.02em',
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = '#0D4F4F'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = '#5C5C5C'}
+                  onMouseEnter={(e) => e.currentTarget.style.color = '#0F6F6F'}
+                  onMouseLeave={(e) => e.currentTarget.style.color = '#666666'}
                 >
                   Assessments
                 </a>
@@ -88,48 +88,56 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                   <a 
                     href="/users" 
                     style={{
-                      fontSize: '0.875rem',
+                      fontSize: '0.8125rem',
                       fontWeight: 500,
-                      color: '#5C5C5C',
+                      color: '#666666',
                       textDecoration: 'none',
-                      transition: 'color 0.2s ease'
+                      transition: 'color 0.15s ease',
+                      letterSpacing: '0.02em',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#0D4F4F'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#5C5C5C'}
+                    onMouseEnter={(e) => e.currentTarget.style.color = '#0F6F6F'}
+                    onMouseLeave={(e) => e.currentTarget.style.color = '#666666'}
                   >
                     Users
                   </a>
                 )}
               </nav>
+              <div style={{
+                height: '24px',
+                width: '1px',
+                background: '#E5E5E5',
+              }} />
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.875rem', fontWeight: 500, color: '#1A1A1A' }}>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#333333' }}>
                   {user.full_name}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#8A8A8A' }}>
+                <div style={{ fontSize: '0.6875rem', color: '#999999', fontFamily: "'IBM Plex Mono', monospace" }}>
                   {user.role}
                 </div>
               </div>
               <button
                 onClick={logout}
                 style={{
-                  padding: '8px 16px',
-                  background: 'transparent',
-                  border: '1px solid #D1D0CC',
+                  padding: '6px 14px',
+                  background: '#F5F5F5',
+                  border: '1px solid #E5E5E5',
                   borderRadius: '4px',
-                  color: '#5C5C5C',
-                  fontSize: '0.875rem',
+                  color: '#666666',
+                  fontSize: '0.8125rem',
                   fontWeight: 500,
                   cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  fontFamily: "'Space Grotesk', sans-serif",
+                  transition: 'all 0.15s ease',
+                  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#0D4F4F';
-                  e.currentTarget.style.color = '#0D4F4F';
+                  e.currentTarget.style.borderColor = '#0F6F6F';
+                  e.currentTarget.style.color = '#0F6F6F';
+                  e.currentTarget.style.background = 'rgba(15, 111, 111, 0.04)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#D1D0CC';
-                  e.currentTarget.style.color = '#5C5C5C';
+                  e.currentTarget.style.borderColor = '#E5E5E5';
+                  e.currentTarget.style.color = '#666666';
+                  e.currentTarget.style.background = '#F5F5F5';
                 }}
               >
                 Sign Out
@@ -173,7 +181,7 @@ function App() {
           element={
             <ProtectedRoute>
               <Layout>
-                <Dashboard />
+                <DashboardV2 />
               </Layout>
             </ProtectedRoute>
           }
@@ -183,27 +191,7 @@ function App() {
           element={
             <ProtectedRoute>
               <Layout>
-                <AssessmentDetail />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/assessment/:assessmentId/interview"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <InterviewInterface />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/assessment/:assessmentId/observations"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <ObservationChecklist />
+                <AssessmentV2Detail />
               </Layout>
             </ProtectedRoute>
           }
@@ -218,6 +206,10 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* Legacy v2 paths redirect to new paths */}
+        <Route path="/v2" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/v2/assessment/:assessmentId" element={<Navigate to="/assessment/:assessmentId" replace />} />
 
         {/* Default Route */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />

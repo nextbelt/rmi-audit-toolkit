@@ -14,35 +14,37 @@ export const Input: React.FC<InputProps> = ({
   ...props
 }) => {
   const containerStyles: CSSProperties = {
-    marginBottom: '24px',
+    marginBottom: '20px',
     width: fullWidth ? '100%' : 'auto',
   };
 
   const labelStyles: CSSProperties = {
     display: 'block',
-    marginBottom: '8px',
+    marginBottom: '6px',
     fontWeight: 500,
-    fontSize: '0.875rem',
-    color: '#1A1A1A',
+    fontSize: '0.813rem',
+    color: '#666666',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
   };
 
   const inputStyles: CSSProperties = {
     width: '100%',
-    padding: '16px',
-    border: `1px solid ${error ? '#9B2C2C' : '#E5E4E0'}`,
+    padding: '10px 14px',
+    border: `1px solid ${error ? 'rgba(197, 48, 48, 0.4)' : '#D0D0D0'}`,
     borderRadius: '4px',
-    fontSize: '1rem',
-    fontFamily: "'Space Grotesk', sans-serif",
-    transition: 'all 0.2s ease',
-    background: '#fff',
-    color: '#1A1A1A',
+    fontSize: '0.875rem',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    transition: 'all 0.15s ease',
+    background: '#FFFFFF',
+    color: '#333333',
     ...style,
   };
 
   const errorStyles: CSSProperties = {
     marginTop: '4px',
     fontSize: '0.75rem',
-    color: '#9B2C2C',
+    color: '#C53030',
   };
 
   return (
@@ -52,12 +54,12 @@ export const Input: React.FC<InputProps> = ({
         style={inputStyles}
         {...props}
         onFocus={(e) => {
-          e.currentTarget.style.borderColor = '#0D4F4F';
+          e.currentTarget.style.borderColor = '#0F6F6F';
           e.currentTarget.style.outline = 'none';
-          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 79, 79, 0.1)';
+          e.currentTarget.style.boxShadow = '0 0 0 2px rgba(15, 111, 111, 0.12)';
         }}
         onBlur={(e) => {
-          e.currentTarget.style.borderColor = error ? '#9B2C2C' : '#E5E4E0';
+          e.currentTarget.style.borderColor = error ? 'rgba(197, 48, 48, 0.4)' : '#D0D0D0';
           e.currentTarget.style.boxShadow = 'none';
         }}
       />
@@ -82,28 +84,30 @@ export const TextArea: React.FC<TextAreaProps> = ({
   ...props
 }) => {
   const containerStyles: CSSProperties = {
-    marginBottom: '24px',
+    marginBottom: '20px',
     width: fullWidth ? '100%' : 'auto',
   };
 
   const labelStyles: CSSProperties = {
     display: 'block',
-    marginBottom: '8px',
+    marginBottom: '6px',
     fontWeight: 500,
-    fontSize: '0.875rem',
-    color: '#1A1A1A',
+    fontSize: '0.813rem',
+    color: '#666666',
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
   };
 
   const textareaStyles: CSSProperties = {
     width: '100%',
-    padding: '16px',
-    border: `1px solid ${error ? '#9B2C2C' : '#E5E4E0'}`,
+    padding: '10px 14px',
+    border: `1px solid ${error ? 'rgba(197, 48, 48, 0.4)' : '#D0D0D0'}`,
     borderRadius: '4px',
-    fontSize: '1rem',
-    fontFamily: "'Space Grotesk', sans-serif",
-    transition: 'all 0.2s ease',
-    background: '#fff',
-    color: '#1A1A1A',
+    fontSize: '0.875rem',
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    transition: 'all 0.15s ease',
+    background: '#FFFFFF',
+    color: '#333333',
     resize: 'vertical',
     minHeight: `${rows * 24}px`,
     ...style,
@@ -112,7 +116,7 @@ export const TextArea: React.FC<TextAreaProps> = ({
   const errorStyles: CSSProperties = {
     marginTop: '4px',
     fontSize: '0.75rem',
-    color: '#9B2C2C',
+    color: '#C53030',
   };
 
   return (
@@ -123,12 +127,12 @@ export const TextArea: React.FC<TextAreaProps> = ({
         rows={rows}
         {...(props as any)}
         onFocus={(e) => {
-          e.currentTarget.style.borderColor = '#0D4F4F';
+          e.currentTarget.style.borderColor = '#0F6F6F';
           e.currentTarget.style.outline = 'none';
-          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(13, 79, 79, 0.1)';
+          e.currentTarget.style.boxShadow = '0 0 0 2px rgba(15, 111, 111, 0.12)';
         }}
         onBlur={(e) => {
-          e.currentTarget.style.borderColor = error ? '#9B2C2C' : '#E5E4E0';
+          e.currentTarget.style.borderColor = error ? 'rgba(197, 48, 48, 0.4)' : '#D0D0D0';
           e.currentTarget.style.boxShadow = 'none';
         }}
       />

@@ -76,9 +76,11 @@ VITE_API_URL=http://localhost:8000
 
 Uses JWT tokens stored in localStorage. Protected routes automatically redirect to login if unauthenticated.
 
-**Demo Credentials:**
-- Email: admin@nextbelt.com
+**Demo Credentials (Local Development):**
+- Email: admin@local.com
 - Password: admin123
+
+**Note:** Production uses Supabase authentication.
 
 ## Components
 

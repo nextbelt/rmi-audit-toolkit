@@ -23,7 +23,8 @@ export const Modal: React.FC<ModalProps> = ({
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0, 0, 0, 0.5)',
+    background: 'rgba(0, 0, 0, 0.7)',
+    backdropFilter: 'blur(8px)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -32,34 +33,37 @@ export const Modal: React.FC<ModalProps> = ({
   };
 
   const contentStyles: CSSProperties = {
-    background: '#fff',
-    borderRadius: '12px',
-    padding: '40px',
+    background: '#FFFFFF',
+    border: '1px solid #E5E5E5',
+    borderRadius: '8px',
+    padding: '24px',
     width: '100%',
     maxWidth,
     maxHeight: '90vh',
     overflow: 'auto',
     position: 'relative',
+    boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
   };
 
   const closeButtonStyles: CSSProperties = {
     position: 'absolute',
-    top: '24px',
-    right: '24px',
-    background: 'none',
-    border: 'none',
-    fontSize: '1.5rem',
+    top: '16px',
+    right: '16px',
+    background: '#F5F5F5',
+    border: '1px solid #E5E5E5',
+    borderRadius: '4px',
+    fontSize: '1rem',
     cursor: 'pointer',
-    color: '#5C5C5C',
-    padding: '8px',
+    color: '#999999',
+    padding: '4px 8px',
     lineHeight: 1,
-    transition: 'color 0.2s ease',
+    transition: 'all 0.15s ease',
   };
 
   const titleStyles: CSSProperties = {
-    fontSize: '1.5rem',
+    fontSize: '1.125rem',
     fontWeight: 600,
-    marginBottom: '24px',
+    marginBottom: '20px',
     color: '#1A1A1A',
   };
 
@@ -75,10 +79,14 @@ export const Modal: React.FC<ModalProps> = ({
           style={closeButtonStyles}
           onClick={onClose}
           onMouseEnter={(e) => {
-            e.currentTarget.style.color = '#1A1A1A';
+            e.currentTarget.style.color = '#333333';
+            e.currentTarget.style.background = '#EEEEEE';
+            e.currentTarget.style.borderColor = '#D0D0D0';
           }}
           onMouseLeave={(e) => {
-            e.currentTarget.style.color = '#5C5C5C';
+            e.currentTarget.style.color = '#999999';
+            e.currentTarget.style.background = '#F5F5F5';
+            e.currentTarget.style.borderColor = '#E5E5E5';
           }}
         >
           ✕

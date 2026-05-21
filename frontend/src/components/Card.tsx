@@ -3,22 +3,25 @@ import React, { CSSProperties, HTMLAttributes } from 'react';
 interface CardProps extends HTMLAttributes<HTMLDivElement> {
   hover?: boolean;
   border?: boolean;
+  glow?: boolean;
 }
 
 export const Card: React.FC<CardProps> = ({
   children,
   hover = false,
   border = true,
+  glow = false,
   style,
   ...props
 }) => {
   const baseStyles: CSSProperties = {
-    background: '#fff',
-    border: border ? '1px solid #E5E4E0' : 'none',
+    background: '#FFFFFF',
+    border: border ? '1px solid #E5E5E5' : 'none',
     borderRadius: '8px',
-    padding: '40px',
-    transition: 'all 0.2s ease',
+    padding: '24px',
+    transition: 'all 0.15s ease',
     position: 'relative',
+    boxShadow: glow ? '0 1px 4px rgba(15, 111, 111, 0.06)' : '0 1px 2px rgba(0, 0, 0, 0.04)',
   };
 
   const combinedStyles = {
@@ -33,16 +36,22 @@ export const Card: React.FC<CardProps> = ({
       onMouseEnter={(e) => {
         if (hover) {
           const target = e.currentTarget;
-          target.style.borderColor = '#D1D0CC';
-          target.style.boxShadow = '0 4px 20px rgba(0,0,0,0.06)';
+          target.style.borderColor = '#D0D0D0';
+          target.style.background = '#FAFAFA';
+          target.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.06)';
+          target.style.transform = 'translateY(-1px)';
         }
+        props.onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
         if (hover) {
           const target = e.currentTarget;
-          target.style.borderColor = '#E5E4E0';
-          target.style.boxShadow = 'none';
+          target.style.borderColor = '#E5E5E5';
+          target.style.background = '#FFFFFF';
+          target.style.boxShadow = glow ? '0 1px 4px rgba(15, 111, 111, 0.06)' : '0 1px 2px rgba(0, 0, 0, 0.04)';
+          target.style.transform = 'translateY(0)';
         }
+        props.onMouseLeave?.(e);
       }}
     >
       {children}

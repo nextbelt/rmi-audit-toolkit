@@ -1,7 +1,7 @@
 import React, { CSSProperties, ButtonHTMLAttributes } from 'react';
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'text';
+  variant?: 'primary' | 'secondary' | 'outline' | 'text' | 'accent';
   size?: 'sm' | 'md' | 'lg';
   fullWidth?: boolean;
   loading?: boolean;
@@ -22,36 +22,44 @@ export const Button: React.FC<ButtonProps> = ({
     alignItems: 'center',
     justifyContent: 'center',
     gap: '8px',
-    fontFamily: "'Space Grotesk', sans-serif",
+    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     fontWeight: 500,
     borderRadius: '4px',
     cursor: disabled || loading ? 'not-allowed' : 'pointer',
-    transition: 'all 0.2s ease',
-    border: '2px solid',
+    transition: 'all 0.15s ease',
+    border: '1px solid',
     textDecoration: 'none',
-    opacity: disabled || loading ? 0.5 : 1,
+    opacity: disabled || loading ? 0.4 : 1,
     width: fullWidth ? '100%' : 'auto',
+    letterSpacing: '0.01em',
   };
 
   const variantStyles: Record<string, CSSProperties> = {
     primary: {
-      background: '#0D4F4F',
-      color: '#fff',
-      borderColor: '#0D4F4F',
+      background: '#0F6F6F',
+      color: '#FFFFFF',
+      borderColor: '#0F6F6F',
+      boxShadow: '0 1px 3px rgba(15, 111, 111, 0.2)',
+    },
+    accent: {
+      background: '#C0603F',
+      color: '#FFFFFF',
+      borderColor: '#C0603F',
+      boxShadow: '0 1px 3px rgba(192, 96, 63, 0.2)',
     },
     secondary: {
-      background: 'transparent',
-      color: '#0D4F4F',
-      borderColor: '#D1D0CC',
+      background: 'rgba(15, 111, 111, 0.06)',
+      color: '#0F6F6F',
+      borderColor: '#D0D0D0',
     },
     outline: {
       background: 'transparent',
-      color: '#1A1A1A',
-      borderColor: '#D1D0CC',
+      color: '#333333',
+      borderColor: '#D0D0D0',
     },
     text: {
       background: 'transparent',
-      color: '#0D4F4F',
+      color: '#0F6F6F',
       border: 'none',
       borderBottom: '1px solid transparent',
     },
@@ -60,15 +68,15 @@ export const Button: React.FC<ButtonProps> = ({
   const sizeStyles: Record<string, CSSProperties> = {
     sm: {
       padding: '8px 16px',
-      fontSize: '0.875rem',
+      fontSize: '0.813rem',
     },
     md: {
-      padding: '16px 24px',
-      fontSize: '1rem',
+      padding: '12px 24px',
+      fontSize: '0.875rem',
     },
     lg: {
-      padding: '20px 32px',
-      fontSize: '1.125rem',
+      padding: '16px 32px',
+      fontSize: '1rem',
     },
   };
 
@@ -88,29 +96,49 @@ export const Button: React.FC<ButtonProps> = ({
         if (!disabled && !loading) {
           const target = e.currentTarget;
           if (variant === 'primary') {
-            target.style.background = '#083A3A';
-            target.style.borderColor = '#083A3A';
+            target.style.background = '#1A8A8A';
+            target.style.borderColor = '#1A8A8A';
+            target.style.boxShadow = '0 2px 6px rgba(15, 111, 111, 0.3)';
             target.style.transform = 'translateY(-1px)';
-          } else if (variant === 'secondary' || variant === 'outline') {
-            target.style.background = '#F2F1EE';
-            target.style.borderColor = '#0D4F4F';
+          } else if (variant === 'accent') {
+            target.style.background = '#D4714F';
+            target.style.borderColor = '#D4714F';
+            target.style.boxShadow = '0 2px 6px rgba(192, 96, 63, 0.3)';
+            target.style.transform = 'translateY(-1px)';
+          } else if (variant === 'secondary') {
+            target.style.background = 'rgba(15, 111, 111, 0.10)';
+            target.style.borderColor = '#0F6F6F';
+          } else if (variant === 'outline') {
+            target.style.background = '#F5F5F5';
+            target.style.borderColor = '#BBBBBB';
           } else if (variant === 'text') {
-            target.style.borderBottomColor = '#0D4F4F';
+            target.style.borderBottomColor = '#0F6F6F';
           }
         }
+        props.onMouseEnter?.(e);
       }}
       onMouseLeave={(e) => {
         const target = e.currentTarget;
         if (variant === 'primary') {
-          target.style.background = '#0D4F4F';
-          target.style.borderColor = '#0D4F4F';
+          target.style.background = '#0F6F6F';
+          target.style.borderColor = '#0F6F6F';
+          target.style.boxShadow = '0 1px 3px rgba(15, 111, 111, 0.2)';
           target.style.transform = 'translateY(0)';
-        } else if (variant === 'secondary' || variant === 'outline') {
+        } else if (variant === 'accent') {
+          target.style.background = '#C0603F';
+          target.style.borderColor = '#C0603F';
+          target.style.boxShadow = '0 1px 3px rgba(192, 96, 63, 0.2)';
+          target.style.transform = 'translateY(0)';
+        } else if (variant === 'secondary') {
+          target.style.background = 'rgba(15, 111, 111, 0.06)';
+          target.style.borderColor = '#D0D0D0';
+        } else if (variant === 'outline') {
           target.style.background = 'transparent';
-          target.style.borderColor = '#D1D0CC';
+          target.style.borderColor = '#D0D0D0';
         } else if (variant === 'text') {
           target.style.borderBottomColor = 'transparent';
         }
+        props.onMouseLeave?.(e);
       }}
     >
       {loading && <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }} />}

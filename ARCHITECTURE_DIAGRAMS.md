@@ -5,7 +5,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                     CLIENT INTERFACE                         │
-│  (Web App / Mobile App / API Client - TO BE BUILT)          │
+│  (React Web App + Mobile-Responsive)                        │
 └──────────────────────┬──────────────────────────────────────┘
                        │ HTTP/REST
                        │ JWT Authentication
@@ -28,7 +28,8 @@
 │                   BUSINESS LOGIC LAYER                       │
 │  ┌────────────────────────────────────────────────────┐     │
 │  │  ScoringEngine                                      │     │
-│  │  • Role-weighted scoring (60/20/20)                │     │
+│  │  • Role-weighted scoring (60/10/20/10/20)          │     │
+│  │  • Interview + Observation scoring (80/20 split)   │     │
 │  │  • Evidence lock enforcement                       │     │
 │  │  • Weakest link caps                               │     │
 │  └────────────────────────────────────────────────────┘     │
@@ -92,10 +93,11 @@ START
   │   └─ Date: 2025-12-27
   │
   ├─► 2. CONDUCT INTERVIEWS
-  │   ├─ Interview Technicians (60% weight)
+  │   ├─ Interview Technicians (60% role weight)
   │   │  └─ P-01: Training? → Score 4 + Evidence
-  │   ├─ Interview Managers (20% weight)
+  │   ├─ Interview Managers (20% role weight)
   │   │  └─ P-05: Budget? → Score 2 + Evidence
+  │   ├─ Interview Supervisors/Planners (10% each)
   │   └─ Store in: question_responses table
   │
   ├─► 3. FIELD OBSERVATIONS
@@ -124,7 +126,8 @@ START
   ├─► 6. CALCULATE SCORES
   │   ├─ Run ScoringEngine.calculate_assessment_scores()
   │   ├─ Apply:
-  │   │  ├─ Role weights (60/20/20)
+  │   │  ├─ Role weights (Tech 60%, Sup 10%, Mgr 20%, Plan 10%, Aud 20%)
+  │   │  ├─ Interview/Observation split (80/20)
   │   │  ├─ Evidence locks (cap high scores without proof)
   │   │  └─ Weakest link (critical failures cap pillars)
   │   ├─ Results:
@@ -203,12 +206,15 @@ USER SUBMITS ANSWER
          │ 1. Get all responses │
          │    for pillar        │
          │ 2. Apply role weights│
-         │    (tech: 60%)       │
-         │ 3. Apply question    │
-         │    weights           │
-         │ 4. Check critical    │
+         │    (tech: 60%,       │
+         │     mgr: 20%, etc.)  │
+         │ 3. Calculate interview│
+         │    score             │
+         │ 4. Calculate obs     │
+         │    score (20%)       │
+         │ 5. Check critical    │
          │    failures          │
-         │ 5. Apply caps        │
+         │ 6. Apply caps        │
          └─────────┬────────────┘
                    │
                    ▼

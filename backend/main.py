@@ -1,77 +1,113 @@
 """
-FastAPI Application - REST API Layer
-Enterprise-grade API with authentication and comprehensive endpoints
+FastAPI application entry point.
+
+Layered:
+    /                     -- health + root
+    /token                -- OAuth2 password login (rate-limited)
+    /users                -- admin user management
+    /assessments/*        -- v1 routes still consumed by the UI (finalize,
+                             generate-report, report download, CMMS analyze)
+    /api/v2/*             -- v2 router (current product)
+    /password-reset/*     -- token-based password reset flow
+    /uploads/{path}       -- authenticated download of stored evidence
 """
-from fastapi import FastAPI, Depends, HTTPException, status, UploadFile, File
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
+from __future__ import annotations
+
+import logging
+import os
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import bcrypt
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
-from typing import Optional
-from typing import List, Optional
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
-from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordRequestForm
+from jose import jwt
 from pydantic import BaseModel, EmailStr
-import os
-import logging
+from sqlalchemy.orm import Session
 
-from database import get_db, init_db
+import audit
+import models_v2  # noqa: F401  -- register v2 tables with Base.metadata
+import models_extra  # noqa: F401 -- register audit_log + assessment_members
+from api_v2 import router as v2_router
+from auth import get_current_user, oauth2_scheme  # noqa: F401 (oauth2_scheme reused indirectly)
+from config import assert_production_secrets, settings
+from database import engine, get_db, init_db
 from models import (
-    User, Assessment, QuestionBank, QuestionResponse,
-    Observation, DataAnalysis, Score, Report,
-    PillarType, QuestionType, TargetRole, AssessmentStatus
+    Assessment,
+    AssessmentStatus,
+    DataAnalysis,
+    Report,
+    User,
 )
-from scoring_engine import ScoringEngine
-from observation_module import ObservationManager
-from data_analysis_module import CMMSDataAnalyzer
-from iso14224_module import ISO14224Validator
-from config import settings
-from ai_scoring import AIScoringEngine
+from rbac import get_v1_assessment_or_403, get_v2_assessment_or_403
+import storage
+from security_utils import (
+    assessment_upload_subdir,
+    issue_password_reset_token,
+    materialize_local,
+    rate_limit_login,
+    resolve_local_path,
+    save_upload,
+    verify_password_reset_token,
+)
+from storage import StoredObject
 
-# Configure logging to suppress 401 (expected auth errors)
-class SuppressAuth401Filter(logging.Filter):
-    def filter(self, record: logging.LogRecord) -> bool:
-        # Suppress 401 Unauthorized logs (expected during normal auth flow)
-        return not (hasattr(record, 'status_code') and record.status_code == 401)
+logger = logging.getLogger(__name__)
 
-# Apply filter to uvicorn access logger
-logging.getLogger("uvicorn.access").addFilter(SuppressAuth401Filter())
+# ---------------------------------------------------------------------------
+# FastAPI app & middleware
+# ---------------------------------------------------------------------------
 
-# Initialize FastAPI app
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
-    description="Enterprise-grade Reliability Maturity Index (RMI) Audit Platform"
+    description="Reliability Maturity Index (RMI) Audit Platform — NextBelt LLC",
 )
 
-# CORS middleware for web frontend (supports local development on port 3000, 3001, 4000)
+
+_DEFAULT_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:4000",
+    "https://rmi-audit-toolkit-frontend-production.up.railway.app",
+]
+_origins = list(_DEFAULT_ORIGINS)
+if settings.FRONTEND_URL and settings.FRONTEND_URL not in _origins:
+    _origins.append(settings.FRONTEND_URL)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "http://localhost:4000",
-        "https://rmi-audit-toolkit-frontend-production.up.railway.app"
-    ],
+    allow_origins=_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["*"],  # Safari compatibility
-    max_age=3600,  # Cache preflight requests for 1 hour
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "Origin", "X-Requested-With"],
+    expose_headers=["Content-Disposition"],
+    max_age=3600,
 )
 
-# Mount static files for evidence uploads
+
+# The /uploads directory exists on disk but is NOT mounted as public static.
+# Use the authenticated `GET /uploads/{path:path}` route below.
 os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
-# Security
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+app.include_router(v2_router)
 
 
-# ==================== PYDANTIC SCHEMAS ====================
+# ---------------------------------------------------------------------------
+# Pydantic schemas
+# ---------------------------------------------------------------------------
+
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -86,7 +122,7 @@ class UserResponse(BaseModel):
     full_name: str
     role: str
     is_active: bool
-    
+
     class Config:
         from_attributes = True
 
@@ -96,738 +132,559 @@ class Token(BaseModel):
     token_type: str
 
 
-class AssessmentCreate(BaseModel):
-    client_name: str
-    site_name: str
-    asset_class: Optional[str] = None
-    industry: Optional[str] = None
-    assessment_date: datetime
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
 
 
-class AssessmentResponse(BaseModel):
-    id: int
-    client_name: str
-    site_name: str
-    status: AssessmentStatus
-    assessment_date: datetime
-    created_at: datetime
-    
-    class Config:
-        from_attributes = True
+class PasswordResetConfirm(BaseModel):
+    token: str
+    new_password: str
 
 
-class QuestionResponseCreate(BaseModel):
-    question_id: int
-    response_value: str
-    numeric_score: Optional[float] = None  # New: Allow direct numeric score
-    respondent_id: Optional[int] = None
-    evidence_notes: Optional[str] = None
-    is_draft: bool = False        # New: Draft responses (not counted in scoring)
-    is_na: bool = False           # New: Not Applicable (excluded from scoring)
+class AssessmentSummary(BaseModel):
+    assessment_id: int
+    pillar_scores: Dict[str, Any]
+    overall_rmi: float
+    maturity_level: str
+    calculated_at: str
+    confidence_variance: Dict[str, Any]
+    maturity_velocity: Dict[str, Any]
+    iso_gap_analysis: Dict[str, Any]
+    risk_adjusted: Dict[str, Any]
 
 
-class ObservationCreate(BaseModel):
-    title: str
-    type: str
-    pillar: str
-    subcategory: Optional[str] = None
-    notes: str
-    pass_fail: Optional[bool] = None
-    severity: Optional[str] = None
-    observed_role: Optional[str] = None
-    location: Optional[str] = None
+# ---------------------------------------------------------------------------
+# Auth helpers
+# ---------------------------------------------------------------------------
 
-
-class QuestionCreate(BaseModel):
-    question_code: str
-    pillar: PillarType
-    question_type: QuestionType
-    question_text: str
-    target_role: TargetRole
-    subcategory: str
-    is_critical: bool = False
-    max_score: int = 5
-
-
-# ==================== AUTHENTICATION ====================
-
-# Local development mode - bypasses bcrypt
-LOCAL_DEV_MODE = os.getenv("LOCAL_DEV_MODE", "false").lower() == "true"
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    if LOCAL_DEV_MODE:
-        # Skip bcrypt in local dev mode - just check if password matches
-        return plain_password == "admin123"  # Simple password for local dev
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8"), (hashed_password or "").encode("utf-8"))
+    except Exception:
+        return False
 
 
 def get_password_hash(password: str) -> str:
-    if LOCAL_DEV_MODE:
-        # Return a dummy hash in local dev mode
-        return "local_dev_hash"
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+def _validate_password_strength(password: str) -> None:
+    if not password or len(password) < 12:
+        raise HTTPException(status_code=400, detail="Password must be at least 12 characters.")
+    if password.lower() in {"admin123", "password", "password123", "letmein"}:
+        raise HTTPException(status_code=400, detail="Password is too common.")
+
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
-
-
-async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
+    expire = datetime.utcnow() + (
+        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise credentials_exception
-    except JWTError:
-        raise credentials_exception
-    
-    user = db.query(User).filter(User.email == email).first()
-    if user is None:
-        raise credentials_exception
-    
-    return user
+    to_encode["exp"] = expire
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-# ==================== API ENDPOINTS ====================
+# ---------------------------------------------------------------------------
+# Startup
+# ---------------------------------------------------------------------------
+#
+# Migrations are owned by Alembic now. Run them at deploy time before the
+# uvicorn process starts (see backend/railway.json and DEPLOYMENT.md):
+#
+#     alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT
+#
+# init_db() remains as a fallback for first-time local SQLite use: if no
+# tables exist at startup, create them all from Base.metadata so a developer
+# running `python -m uvicorn main:app` against a fresh sqlite file does not
+# get a stack trace before they've run Alembic.
+
+
+def _maybe_bootstrap_tables() -> None:
+    """Create tables only if the DB has none — first-run local DX only.
+
+    In any real deploy, `alembic upgrade head` has already run.
+    """
+    from sqlalchemy import inspect as sa_inspect
+
+    inspector = sa_inspect(engine)
+    if not inspector.get_table_names():
+        logger.warning(
+            "Database has no tables. Bootstrapping from Base.metadata for local dev. "
+            "Run `alembic upgrade head` instead in any real deploy."
+        )
+        init_db()
+
 
 @app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
-    init_db()
+async def _on_startup() -> None:
+    assert_production_secrets()
+    _maybe_bootstrap_tables()
+
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
 
 
 @app.get("/")
-async def root():
+async def root() -> dict:
     return {
         "application": settings.APP_NAME,
         "version": settings.VERSION,
-        "status": "operational"
+        "status": "operational",
     }
 
 
+@app.get("/healthz")
+async def healthz() -> dict:
+    """Lightweight health probe for the load balancer."""
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
+# Auth
+# ---------------------------------------------------------------------------
+
+
 @app.post("/register", response_model=UserResponse)
-async def register_user(user: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user"""
-    # Check if user exists
-    existing_user = db.query(User).filter(User.email == user.email).first()
-    if existing_user:
+async def register_user(
+    payload: UserCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+    _validate_password_strength(payload.password)
+
+    if db.query(User).filter(User.email == payload.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    
-    # Create user
-    hashed_password = get_password_hash(user.password)
-    db_user = User(
-        email=user.email,
-        hashed_password=hashed_password,
-        full_name=user.full_name,
-        role=user.role
+
+    user = User(
+        email=payload.email,
+        hashed_password=get_password_hash(payload.password),
+        full_name=payload.full_name,
+        role=payload.role,
     )
-    
-    db.add(db_user)
+    db.add(user)
     db.commit()
-    db.refresh(db_user)
-    
-    return db_user
+    db.refresh(user)
+
+    audit.record(
+        db,
+        action="user.create",
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        target_type="user",
+        target_id=user.id,
+        ip_address=(request.client.host if request.client else None),
+        details={"email": user.email, "role": user.role},
+    )
+    return user
 
 
 @app.post("/token", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    """Login and get access token"""
+async def login(
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
+):
+    rate_limit_login(request, form_data.username)
     user = db.query(User).filter(User.email == form_data.username).first()
-    if user:
-        password_valid = verify_password(form_data.password, user.hashed_password)
-        if not password_valid:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect email or password"
-            )
-    else:
+    if not user or not user.is_active or not verify_password(form_data.password, user.hashed_password):
+        # Generic message; do not leak account existence
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password"
+            detail="Incorrect email or password",
         )
-    
-    access_token = create_access_token(data={"sub": user.email})
+
+    access_token = create_access_token({"sub": user.email})
+    audit.record(
+        db,
+        action="user.login",
+        actor_id=user.id,
+        actor_email=user.email,
+        target_type="user",
+        target_id=user.id,
+        ip_address=(request.client.host if request.client else None),
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
 @app.get("/users/me", response_model=UserResponse)
 async def get_me(current_user: User = Depends(get_current_user)):
-    """Get current logged-in user"""
     return current_user
 
 
-# ==================== ASSESSMENT ENDPOINTS ====================
+# ---------------------------------------------------------------------------
+# Password reset
+# ---------------------------------------------------------------------------
 
-@app.post("/assessments", response_model=AssessmentResponse)
-async def create_assessment(
-    assessment: AssessmentCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+
+@app.post("/password-reset/request")
+async def password_reset_request(
+    payload: PasswordResetRequest,
+    request: Request,
+    db: Session = Depends(get_db),
 ):
-    """Create a new RMI assessment"""
-    db_assessment = Assessment(
-        **assessment.dict(),
-        creator_id=current_user.id,
-        status=AssessmentStatus.DRAFT
-    )
-    
-    db.add(db_assessment)
-    db.commit()
-    db.refresh(db_assessment)
-    
-    return db_assessment
+    """Issue a reset token. Always returns 200 to avoid account enumeration.
 
-
-@app.get("/assessments", response_model=List[AssessmentResponse])
-async def list_assessments(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """List all assessments"""
-    assessments = db.query(Assessment).all()
-    return assessments
-
-
-@app.get("/assessments/{assessment_id}", response_model=AssessmentResponse)
-async def get_assessment(
-    assessment_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get specific assessment details"""
-    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
-    if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
-    
-    return assessment
-
-
-@app.put("/assessments/{assessment_id}/status")
-async def update_assessment_status(
-    assessment_id: int,
-    status: AssessmentStatus,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Update assessment status"""
-    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
-    if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
-    
-    assessment.status = status
-    if status == AssessmentStatus.COMPLETED:
-        assessment.completed_at = datetime.utcnow()
-    
-    db.commit()
-    return {"message": "Status updated", "new_status": status}
-
-
-# ==================== QUESTION BANK ENDPOINTS ====================
-
-@app.get("/questions")
-async def list_questions(
-    pillar: Optional[PillarType] = None,
-    target_role: Optional[TargetRole] = None,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """List questions, optionally filtered by pillar or role"""
-    query = db.query(QuestionBank).filter(QuestionBank.is_active == True)
-    
-    if pillar:
-        query = query.filter(QuestionBank.pillar == pillar)
-    if target_role:
-        query = query.filter(QuestionBank.target_role == target_role)
-    
-    questions = query.all()
-    return questions
-
-
-@app.post("/questions")
-async def create_question(
-    question: QuestionCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a new question in the question bank"""
-    db_question = QuestionBank(**question.dict())
-    db.add(db_question)
-    db.commit()
-    db.refresh(db_question)
-    return db_question
-
-
-@app.get("/questions/critical")
-async def list_critical_questions(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """List all critical questions"""
-    questions = db.query(QuestionBank).filter(
-        QuestionBank.is_critical == True,
-        QuestionBank.is_active == True
-    ).all()
-    return questions
-
-
-@app.post("/questions")
-async def create_question(
-    question: QuestionCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a new question (admin only)"""
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
-    
-    db_question = QuestionBank(
-        code=question.code,
-        pillar=question.pillar,
-        question_type=question.question_type,
-        question_text=question.question_text,
-        target_role=question.target_role,
-        is_active=True,
-        is_critical=False
-    )
-    db.add(db_question)
-    db.commit()
-    db.refresh(db_question)
-    return db_question
-
-
-# ==================== QUESTION RESPONSE ENDPOINTS ====================
-
-@app.post("/assessments/{assessment_id}/responses")
-async def submit_response(
-    assessment_id: int,
-    response: QuestionResponseCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Submit a question response"""
-    # Verify assessment exists
-    assessment = db.query(Assessment).filter(Assessment.id == assessment_id).first()
-    if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
-    
-    # Get question to determine scoring
-    question = db.query(QuestionBank).filter(QuestionBank.id == response.question_id).first()
-    if not question:
-        raise HTTPException(status_code=404, detail="Question not found")
-    
-    # Calculate numeric score based on response
-    numeric_score = None
-    ai_rationale = None
-    ai_confidence = None
-    
-    # PRIORITY 1: Use numeric_score if directly provided by frontend
-    if response.numeric_score is not None:
-        numeric_score = response.numeric_score
-        print(f"Using provided numeric score: {numeric_score}")
-    else:
-        # PRIORITY 2: Try to parse from response_value or use AI scoring
-        # Check if there's an existing response to reuse AI scoring
-        existing_response = db.query(QuestionResponse).filter(
-            QuestionResponse.assessment_id == assessment_id,
-            QuestionResponse.question_id == response.question_id
-        ).order_by(QuestionResponse.id.desc()).first()
-        
-        if question.question_type == QuestionType.LIKERT:
-            # Try to convert to float if it's a numeric value (1-5)
-            try:
-                numeric_score = float(response.response_value)
-            except ValueError:
-                # It's a text response - only use AI to score it if this is a FINAL submission (not a draft)
-                # and we haven't already scored it
-                if not response.is_draft and settings.OPENAI_API_KEY:
-                    # Check if we already have AI scoring from a previous submission
-                    if existing_response and existing_response.numeric_score is not None:
-                        # Reuse existing AI score - don't call API again
-                        numeric_score = existing_response.numeric_score
-                        print(f"Reusing existing AI score: {numeric_score}")
-                    else:
-                        # This is a new final submission - call AI scoring ONCE
-                        try:
-                            print(f"Calling AI scoring for question {response.question_id} (first time)")
-                            ai_engine = AIScoringEngine()
-                            ai_result = ai_engine.score_text_response(
-                                question_text=question.question_text,
-                                response_text=response.response_value,
-                                question_type=question.question_type.value
-                            )
-                            numeric_score = ai_result.get("numeric_score")
-                            ai_rationale = ai_result.get("rationale")
-                            ai_confidence = ai_result.get("confidence")
-                            
-                            # Add AI analysis to evidence notes
-                            ai_note = f"\n\n[AI Analysis - {ai_confidence} confidence]\n{ai_rationale}"
-                            if response.evidence_notes:
-                                response.evidence_notes += ai_note
-                            else:
-                                response.evidence_notes = ai_note
-                                
-                        except Exception as e:
-                            print(f"AI scoring failed: {str(e)}")
-                            # Leave numeric_score as None if AI fails
-                            pass
-                elif response.is_draft and existing_response and existing_response.numeric_score is not None:
-                    # For drafts, reuse previous score if available
-                    numeric_score = existing_response.numeric_score
-                    
-        elif question.question_type == QuestionType.BINARY:
-            try:
-                numeric_score = float(response.response_value)
-            except ValueError:
-                numeric_score = 5.0 if response.response_value.lower() == 'yes' else 1.0
-    
-    # Handle N/A responses - set numeric_score to None so it's excluded from calculations
-    if response.is_na:
-        numeric_score = None  # N/A responses don't contribute to score
-    
-    # Create response
-    db_response = QuestionResponse(
-        assessment_id=assessment_id,
-        question_id=response.question_id,
-        respondent_id=response.respondent_id,
-        response_value=response.response_value,
-        numeric_score=numeric_score,
-        evidence_provided=bool(response.evidence_notes),
-        evidence_notes=response.evidence_notes,
-        is_draft=response.is_draft,     # Store draft state
-        is_na=response.is_na,           # Store N/A flag
-        answered_by=current_user.id
-    )
-    
-    db.add(db_response)
-    db.commit()
-    db.refresh(db_response)
-    
-    return db_response
-
-
-@app.get("/assessments/{assessment_id}/responses")
-async def list_responses(
-    assessment_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """List all responses for an assessment"""
-    responses = db.query(QuestionResponse).filter(
-        QuestionResponse.assessment_id == assessment_id
-    ).all()
-    return responses
-
-
-# ==================== OBSERVATION ENDPOINTS ====================
-
-@app.post("/assessments/{assessment_id}/observations")
-async def create_observation(
-    assessment_id: int,
-    observation: ObservationCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create a field observation"""
-    obs_manager = ObservationManager(db)
-    
-    obs_data = observation.dict()
-    obs_data['observed_at'] = datetime.utcnow()
-    
-    db_observation = obs_manager.create_observation(
-        assessment_id=assessment_id,
-        observer_id=current_user.id,
-        observation_data=obs_data
-    )
-    
-    return db_observation
-
-
-@app.post("/assessments/{assessment_id}/observations/batch")
-async def create_batch_observations(
-    assessment_id: int,
-    observations: List[ObservationCreate],
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Create multiple field observations at once (for checklists)"""
-    obs_manager = ObservationManager(db)
-    results = []
-    
-    for obs in observations:
-        obs_data = obs.dict()
-        obs_data['observed_at'] = datetime.utcnow()
-        
-        created = obs_manager.create_observation(
-            assessment_id=assessment_id,
-            observer_id=current_user.id,
-            observation_data=obs_data
+    The token is returned in the response body in non-production so an admin
+    can hand it to the user out-of-band. In production it is logged at INFO
+    level so it ends up in Railway logs only. Plugging in an email provider
+    is a one-line change here.
+    """
+    user = db.query(User).filter(User.email == payload.email).first()
+    response: Dict[str, Any] = {"ok": True}
+    if user and user.is_active:
+        token = issue_password_reset_token(user.id)
+        if settings.ENVIRONMENT.lower() == "production":
+            logger.info("password_reset_token_issued user=%s", user.email)
+        else:
+            response["debug_token"] = token
+        audit.record(
+            db,
+            action="user.password_reset_requested",
+            actor_id=user.id,
+            actor_email=user.email,
+            target_type="user",
+            target_id=user.id,
+            ip_address=(request.client.host if request.client else None),
         )
-        results.append(created)
-    
-    return {"created_count": len(results), "observations": results}
-    
-    db_observation = obs_manager.create_observation(
-        assessment_id=assessment_id,
-        observer_id=current_user.id,
-        observation_data=obs_data
+    return response
+
+
+@app.post("/password-reset/confirm")
+async def password_reset_confirm(
+    payload: PasswordResetConfirm,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    user_id = verify_password_reset_token(payload.token)
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not user.is_active:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    _validate_password_strength(payload.new_password)
+    user.hashed_password = get_password_hash(payload.new_password)
+    db.commit()
+    audit.record(
+        db,
+        action="user.password_reset_confirmed",
+        actor_id=user.id,
+        actor_email=user.email,
+        target_type="user",
+        target_id=user.id,
+        ip_address=(request.client.host if request.client else None),
     )
-    
-    return db_observation
+    return {"ok": True}
 
 
-@app.get("/assessments/{assessment_id}/observations")
-async def list_observations(
-    assessment_id: int,
+# ---------------------------------------------------------------------------
+# Authenticated upload download
+# ---------------------------------------------------------------------------
+
+
+@app.get("/uploads/{path:path}")
+async def serve_upload(
+    path: str,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """List all observations for an assessment"""
-    obs_manager = ObservationManager(db)
-    observations = obs_manager.get_observations_by_assessment(assessment_id)
-    return observations
+    """Authenticated download for stored evidence.
+
+    Works with either storage backend:
+    - local: streams the file from UPLOAD_DIR after a path-traversal check.
+    - supabase: streams from Supabase Storage via the service-role API.
+
+    Per-assessment access is enforced when the path begins with
+    ``assessments/<id>/``.
+    """
+    # Enforce per-assessment membership if applicable.
+    parts = path.replace("\\", "/").split("/")
+    if len(parts) >= 2 and parts[0] == "assessments":
+        try:
+            assessment_id = int(parts[1])
+        except ValueError:
+            assessment_id = None
+        if assessment_id is not None:
+            try:
+                get_v2_assessment_or_403(db, assessment_id, current_user)
+            except HTTPException as exc:
+                if exc.status_code == 404:
+                    get_v1_assessment_or_403(db, assessment_id, current_user)
+                else:
+                    raise
+
+    if storage.backend_name() == "supabase":
+        stored = StoredObject(backend="supabase", key=path, bytes=0)
+        from fastapi.responses import StreamingResponse
+
+        return StreamingResponse(
+            storage.open_stream(stored),
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": f'attachment; filename="{os.path.basename(path)}"'},
+        )
+
+    # Local backend
+    full = resolve_local_path(os.path.join(settings.UPLOAD_DIR, path))
+    return FileResponse(full, filename=os.path.basename(full))
 
 
-# ==================== SCORING ENDPOINTS ====================
+# ---------------------------------------------------------------------------
+# v1 assessment endpoints still used by the UI:
+#   POST /assessments/{id}/finalize
+#   POST /assessments/{id}/generate-report
+#   GET  /assessments/{id}/report/download
+#   POST /assessments/{id}/analyze-work-orders   (CMMS upload)
+#
+# All other v1 routes have been removed — the UI uses /api/v2/* instead.
+# These four delegate to v2 first, then fall back to v1 so legacy assessment
+# IDs still work.
+# ---------------------------------------------------------------------------
 
-@app.post("/assessments/{assessment_id}/calculate-scores")
-async def calculate_scores(
+
+def _finalize_v1(db: Session, assessment: Assessment, actor: User) -> dict:
+    if assessment.finalized_at is not None:
+        return {
+            "message": "Assessment already finalized",
+            "finalized_at": assessment.finalized_at,
+        }
+    assessment.finalized_at = datetime.utcnow()
+    assessment.status = AssessmentStatus.COMPLETED
+    assessment.completed_at = datetime.utcnow()
+    db.commit()
+    return {
+        "message": "Assessment finalized",
+        "finalized_at": assessment.finalized_at,
+        "status": assessment.status.value if assessment.status else None,
+    }
+
+
+def _finalize_v2(db: Session, assessment, actor: User) -> dict:
+    if getattr(assessment, "finalized_at", None):
+        return {"message": "Assessment already finalized", "finalized_at": assessment.finalized_at}
+    assessment.finalized_at = datetime.utcnow()
+    assessment.status = "completed"
+    db.commit()
+    return {"message": "Assessment finalized", "finalized_at": assessment.finalized_at}
+
+
+@app.post("/assessments/{assessment_id}/finalize")
+async def finalize_assessment(
     assessment_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Calculate RMI scores for an assessment"""
-    scoring_engine = ScoringEngine(db)
-    
+    # Try v2 first (current UI), fall back to v1
     try:
-        scores = scoring_engine.calculate_assessment_scores(assessment_id)
-        return scores
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+        a2 = get_v2_assessment_or_403(db, assessment_id, current_user)
+        result = _finalize_v2(db, a2, current_user)
+        audit.record(
+            db,
+            action="assessment.finalize",
+            actor_id=current_user.id,
+            actor_email=current_user.email,
+            target_type="assessment_v2",
+            target_id=assessment_id,
+            ip_address=(request.client.host if request.client else None),
+        )
+        return result
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
 
-
-@app.get("/assessments/{assessment_id}/scores")
-async def get_scores(
-    assessment_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get calculated scores for an assessment"""
-    scores = db.query(Score).filter(Score.assessment_id == assessment_id).all()
-    return scores
-
-
-@app.get("/assessments/{assessment_id}/score-breakdown")
-async def get_score_breakdown(
-    assessment_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get detailed score breakdown by pillar and subcategory"""
-    scoring_engine = ScoringEngine(db)
-    breakdown = scoring_engine.get_score_breakdown(assessment_id)
-    return breakdown
-
-
-# ==================== DATA ANALYSIS ENDPOINTS ====================
-
-@app.post("/assessments/{assessment_id}/analyze-work-orders")
-async def analyze_work_orders(
-    assessment_id: int,
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Upload and analyze CMMS work order data"""
-    # Save uploaded file
-    file_path = f"./uploads/{file.filename}"
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    
-    # Analyze
-    analyzer = CMMSDataAnalyzer(db)
-    results = analyzer.analyze_work_orders(
-        assessment_id=assessment_id,
-        analyzer_id=current_user.id,
-        file_path=file_path
+    a1 = get_v1_assessment_or_403(db, assessment_id, current_user)
+    result = _finalize_v1(db, a1, current_user)
+    audit.record(
+        db,
+        action="assessment.finalize",
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        target_type="assessment_v1",
+        target_id=assessment_id,
+        ip_address=(request.client.host if request.client else None),
     )
-    
-    return results
+    return result
 
-
-@app.post("/assessments/{assessment_id}/analyze-pm-compliance")
-async def analyze_pm_compliance(
-    assessment_id: int,
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Upload and analyze PM compliance data"""
-    file_path = f"./uploads/{file.filename}"
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    
-    analyzer = CMMSDataAnalyzer(db)
-    results = analyzer.analyze_pm_compliance(
-        assessment_id=assessment_id,
-        analyzer_id=current_user.id,
-        file_path=file_path
-    )
-    
-    return results
-
-
-# ==================== ISO 14224 ENDPOINTS ====================
-
-@app.post("/assessments/{assessment_id}/iso14224/validate-hierarchy")
-async def validate_iso14224_hierarchy(
-    assessment_id: int,
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Validate asset hierarchy against ISO 14224"""
-    import pandas as pd
-    
-    file_path = f"./uploads/{file.filename}"
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    
-    # Read hierarchy data
-    if file_path.endswith('.csv'):
-        df = pd.read_csv(file_path)
-    else:
-        df = pd.read_excel(file_path)
-    
-    validator = ISO14224Validator(db)
-    results = validator.validate_asset_hierarchy(
-        assessment_id=assessment_id,
-        auditor_id=current_user.id,
-        hierarchy_data=df
-    )
-    
-    return results
-
-
-@app.get("/assessments/{assessment_id}/iso14224/summary")
-async def get_iso14224_summary(
-    assessment_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """Get ISO 14224 audit summary"""
-    validator = ISO14224Validator(db)
-    summary = validator.get_audit_summary(assessment_id)
-    return summary
-
-
-# ==================== REPORT ENDPOINTS ====================
 
 @app.post("/assessments/{assessment_id}/generate-report")
 async def generate_report(
     assessment_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Generate executive PDF report"""
-    from report_generator import ReportGenerator
-    
-    generator = ReportGenerator(db, output_dir=settings.REPORT_OUTPUT_DIR)
-    
+    """Generate an executive PDF report.
+
+    Tries v2 path first (current product). Falls back to v1 for legacy IDs.
+    """
+    # Try v2
     try:
-        pdf_path = generator.generate_executive_report(
-            assessment_id=assessment_id,
-            generated_by=current_user.id
-        )
-        
+        get_v2_assessment_or_403(db, assessment_id, current_user)
+        from report_generator_v2 import ReportGeneratorV2
+
+        generator = ReportGeneratorV2(db, output_dir=settings.REPORT_OUTPUT_DIR)
+        pdf_path = generator.generate(assessment_id=assessment_id, generated_by=current_user.id)
         return {
             "message": "Report generated successfully",
             "file_path": pdf_path,
-            "download_url": f"/assessments/{assessment_id}/report/download"
+            "download_url": f"/assessments/{assessment_id}/report/download",
         }
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+
+    # Fall back to v1
+    get_v1_assessment_or_403(db, assessment_id, current_user)
+    from report_generator import ReportGenerator
+
+    generator = ReportGenerator(db, output_dir=settings.REPORT_OUTPUT_DIR)
+    try:
+        pdf_path = generator.generate_executive_report(
+            assessment_id=assessment_id, generated_by=current_user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {
+        "message": "Report generated successfully",
+        "file_path": pdf_path,
+        "download_url": f"/assessments/{assessment_id}/report/download",
+    }
 
 
 @app.get("/assessments/{assessment_id}/report/download")
 async def download_report(
     assessment_id: int,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Download the latest generated report as PDF"""
-    # Find the latest report for this assessment
-    report = db.query(Report).filter(
-        Report.assessment_id == assessment_id
-    ).order_by(Report.generated_at.desc()).first()
-    
-    if not report or not os.path.exists(report.file_path):
+    # Try v2 ownership, fall back to v1
+    try:
+        get_v2_assessment_or_403(db, assessment_id, current_user)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        get_v1_assessment_or_403(db, assessment_id, current_user)
+
+    report = (
+        db.query(Report)
+        .filter(Report.assessment_id == assessment_id)
+        .order_by(Report.generated_at.desc())
+        .first()
+    )
+    if not report or not report.file_path:
         raise HTTPException(status_code=404, detail="Report not found. Generate a report first.")
-    
-    return FileResponse(
-        path=report.file_path,
-        filename=os.path.basename(report.file_path),
-        media_type='application/pdf'
+
+    # Reports are still written to the local reports/ directory by both
+    # generators. (Storing reports in Supabase is a separate, cheaper task
+    # since they're regenerable from scores.)
+    full = str(report.file_path)
+    if not os.path.isfile(full):
+        raise HTTPException(status_code=404, detail="Report file missing")
+    return FileResponse(path=full, filename=os.path.basename(full), media_type="application/pdf")
+
+
+@app.post("/assessments/{assessment_id}/analyze-work-orders")
+async def analyze_work_orders(
+    assessment_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Upload + analyze a CMMS work order export.
+
+    Files are stored under uploads/assessments/<id>/cmms/ with a sanitized
+    randomized filename; size is enforced; MIME/ext are validated.
+    """
+    # Caller must own the assessment (either v1 or v2)
+    try:
+        get_v2_assessment_or_403(db, assessment_id, current_user)
+    except HTTPException as exc:
+        if exc.status_code != 404:
+            raise
+        a1 = get_v1_assessment_or_403(db, assessment_id, current_user)
+        if a1.finalized_at:
+            raise HTTPException(
+                status_code=403, detail="Cannot upload data to finalized assessment"
+            )
+
+    stored = await save_upload(
+        file,
+        subdir=assessment_upload_subdir(assessment_id, "cmms"),
     )
 
+    # Pandas needs a local path. For local backend this is a no-op; for
+    # supabase the file is streamed into a tmp file we clean up afterwards.
+    local_path, is_temp = materialize_local(stored)
+    try:
+        from data_analysis_module import CMMSDataAnalyzer
 
-# ==================== USER MANAGEMENT ENDPOINTS ====================
+        analyzer = CMMSDataAnalyzer(db)
+        return analyzer.analyze_work_orders(
+            assessment_id=assessment_id,
+            analyzer_id=current_user.id,
+            file_path=local_path,
+        )
+    finally:
+        if is_temp:
+            try:
+                os.remove(local_path)
+            except OSError:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# User management (admin only)
+# ---------------------------------------------------------------------------
+
 
 @app.get("/users", response_model=List[UserResponse])
 async def list_users(
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """List all users (admin only)"""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
-    users = db.query(User).all()
-    return users
+    return db.query(User).all()
 
 
 @app.patch("/users/{user_id}")
 async def update_user(
     user_id: int,
     updates: dict,
+    request: Request,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    """Update user (admin only)"""
     if current_user.role != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
-    
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
-    # Update allowed fields
-    if "is_active" in updates:
-        user.is_active = updates["is_active"]
-    if "role" in updates:
-        user.role = updates["role"]
-    if "full_name" in updates:
-        user.full_name = updates["full_name"]
-    
+
+    changed: Dict[str, Any] = {}
+    for field in ("is_active", "role", "full_name"):
+        if field in updates:
+            setattr(user, field, updates[field])
+            changed[field] = updates[field]
+
     db.commit()
     db.refresh(user)
-    
-    return {"message": "User updated successfully"}
+    audit.record(
+        db,
+        action="user.update",
+        actor_id=current_user.id,
+        actor_email=current_user.email,
+        target_type="user",
+        target_id=user_id,
+        ip_address=(request.client.host if request.client else None),
+        details=changed,
+    )
+    return {"message": "User updated", "changes": changed}
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True, reload_dirs=["./"], log_level="info")

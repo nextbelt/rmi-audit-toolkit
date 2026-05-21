@@ -78,14 +78,14 @@ export const UserManagement: React.FC = () => {
       }}>
         <div>
           <h1 style={{ 
-            fontSize: '2rem', 
+            fontSize: '1.75rem', 
             fontWeight: 600, 
-            color: '#1A1A1A',
+            color: '#F5F4F1',
             marginBottom: '8px' 
           }}>
             User Management
           </h1>
-          <p style={{ color: '#666', fontSize: '1rem' }}>
+          <p style={{ color: '#5F5E59', fontSize: '0.875rem' }}>
             Manage user access and permissions
           </p>
         </div>
@@ -104,10 +104,10 @@ export const UserManagement: React.FC = () => {
               alignItems: 'center' 
             }}>
               <div>
-                <div style={{ fontWeight: 600, marginBottom: '4px' }}>
+                <div style={{ fontWeight: 600, marginBottom: '4px', color: '#F5F4F1' }}>
                   {user.full_name}
                 </div>
-                <div style={{ fontSize: '0.875rem', color: '#666' }}>
+                <div style={{ fontSize: '0.875rem', color: '#8A8A86' }}>
                   {user.email}
                 </div>
               </div>
@@ -118,8 +118,8 @@ export const UserManagement: React.FC = () => {
                   borderRadius: '4px',
                   fontSize: '0.875rem',
                   fontWeight: 500,
-                  background: user.role === 'admin' ? '#C65D3B' : 
-                             user.role === 'auditor' ? '#0D4F4F' : '#666',
+                  background: user.role === 'admin' ? '#D4714F' : 
+                             user.role === 'auditor' ? '#1A8A8A' : '#5F5E59',
                   color: 'white'
                 }}>
                   {user.role}
@@ -161,18 +161,19 @@ export const UserManagement: React.FC = () => {
           left: 0,
           right: 0,
           bottom: 0,
-          background: 'rgba(0,0,0,0.5)',
+          background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(8px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000
         }}>
           <Card style={{ width: '100%', maxWidth: '500px', padding: '32px' }}>
-            <h2 style={{ marginBottom: '24px', fontSize: '1.5rem' }}>Create New User</h2>
+            <h2 style={{ marginBottom: '24px', fontSize: '1.25rem', color: '#F5F4F1' }}>Create New User</h2>
             
             <form onSubmit={handleCreateUser}>
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Email
                 </label>
                 <Input
@@ -185,7 +186,7 @@ export const UserManagement: React.FC = () => {
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Full Name
                 </label>
                 <Input
@@ -198,7 +199,7 @@ export const UserManagement: React.FC = () => {
               </div>
 
               <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Password
                 </label>
                 <Input
@@ -211,7 +212,7 @@ export const UserManagement: React.FC = () => {
               </div>
 
               <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Role
                 </label>
                 <select
@@ -220,10 +221,12 @@ export const UserManagement: React.FC = () => {
                   style={{
                     width: '100%',
                     padding: '12px',
-                    border: '2px solid #D1D0CC',
-                    borderRadius: '4px',
-                    fontSize: '1rem',
-                    fontFamily: "'Space Grotesk', sans-serif"
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    fontFamily: "'Space Grotesk', sans-serif",
+                    background: '#0D1312',
+                    color: '#E8E6E1',
                   }}
                 >
                   <option value="auditor">Auditor</option>

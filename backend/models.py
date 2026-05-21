@@ -91,6 +91,9 @@ class Assessment(Base):
     asset_class = Column(String(100))  # e.g., "Pumps", "HVAC", "Processing"
     industry = Column(String(100))  # e.g., "Manufacturing", "Oil & Gas"
     
+    # Risk-Adjusted Weighting (NEW: Strategic Evolution)
+    site_criticality = Column(Float, default=1.0)  # 1.0 to 2.0 multiplier for high-risk sites
+    
     # Assessment Details
     assessment_date = Column(DateTime, nullable=False)
     status = Column(Enum(AssessmentStatus), default=AssessmentStatus.DRAFT)
@@ -114,6 +117,7 @@ class Assessment(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
+    finalized_at = Column(DateTime, nullable=True)  # When assessment was locked
 
 
 class AssessmentAuditor(Base):
@@ -160,6 +164,10 @@ class QuestionBank(Base):
     scoring_logic = Column(JSON, nullable=True)  # Stores rules like "1: X, 5: Y"
     min_score = Column(Integer, default=1)
     max_score = Column(Integer, default=5)
+    
+    # ISO 55001 Alignment (NEW: Strategic Evolution)
+    iso_55001_clause = Column(String(50), nullable=True)  # e.g., "7.2", "8.1"
+    iso_55001_mapping = Column(JSON, nullable=True)  # Detailed mapping info
     
     # Metadata
     is_critical = Column(Boolean, default=False)  # Critical questions affect pillar caps

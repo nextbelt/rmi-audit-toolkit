@@ -1,220 +1,228 @@
-# RMI Audit Toolkit
+# Deployment guide
 
-Professional Reliability Maturity Index (RMI) audit software for NextBelt LLC.
+Production runs on Railway: one service for the FastAPI backend, one for the
+React frontend (built with Vite, served by `serve`), one for Postgres.
+Supabase provides Storage for uploaded evidence (private bucket).
 
-## 📁 Project Structure
+Authoritative module index is in [README.md](README.md). This document is the
+operational runbook — secrets, migrations, storage, rotation.
 
-```
-RMI Audit Toolkit/
-├── backend/                    # FastAPI backend (deploy to Railway)
-│   ├── main.py                # Main API application
-│   ├── models.py              # Database models
-│   ├── scoring_engine.py      # RMI calculation logic
-│   ├── report_generator.py    # PDF report generation
-│   ├── supabase_auth.py       # Supabase authentication
-│   ├── requirements.txt       # Python dependencies
-│   ├── railway.json           # Railway deployment config
-│   └── README.md              # Backend documentation
-│
-├── frontend/                   # React frontend (deploy to Railway)
-│   ├── src/
-│   │   ├── api/               # API client + Supabase auth
-│   │   ├── components/        # Reusable UI components
-│   │   ├── views/             # Page components
-│   │   └── styles/            # NextBelt design system
-│   ├── railway.json           # Railway deployment config
-│   ├── package.json
-│   └── README.md              # Frontend documentation
-│
-├── DEPLOYMENT.md              # Deployment guide (this file)
-└── README.md                  # Project overview
-```
+---
 
-## 🚀 Deployment Guide
+## 1. First-time setup
 
-### **Step 1: Set Up Supabase (Authentication)**
+### 1.1 Backend on Railway
 
-1. Go to https://supabase.com and create a new project
-2. In project settings, copy:
-   - Project URL: `https://xxxxx.supabase.co`
-   - Anon/Public key: `eyJhbG...`
-   - Service role key: `eyJhbG...` (keep secret!)
+Service: **rmi-audit-toolkit-backend**
 
-3. In Supabase SQL Editor, run:
-```sql
--- Create users table (syncs with auth.users)
-CREATE TABLE public.users (
-  id UUID REFERENCES auth.users ON DELETE CASCADE,
-  email TEXT UNIQUE NOT NULL,
-  full_name TEXT,
-  role TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  PRIMARY KEY (id)
-);
+Required env vars (set in Railway → service → Variables):
 
--- Enable Row Level Security
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+| Var | Value |
+|---|---|
+| `DATABASE_URL` | provided by the Postgres plugin |
+| `SECRET_KEY` | output of `python -c "import secrets; print(secrets.token_urlsafe(48))"` |
+| `ENVIRONMENT` | `production` (refuses to boot if `SECRET_KEY` is weak) |
+| `FRONTEND_URL` | `https://<your-frontend>.up.railway.app` |
+| `INITIAL_ADMIN_EMAIL` | one-time seed; remove after the admin user exists |
+| `INITIAL_ADMIN_PASSWORD` | ≥12 chars; remove after seed |
+| `LOGIN_RATE_LIMIT_PER_MIN` | optional; default 10 |
+| `STORAGE_BACKEND` | `supabase` for production, `local` only for dev |
+| `SUPABASE_URL` | `https://<ref>.supabase.co` |
+| `SUPABASE_SERVICE_KEY` | service_role key — backend only, never frontend |
+| `SUPABASE_BUCKET` | `evidence` (or your bucket name) |
+| `OPENAI_API_KEY` | optional, for AI-assisted text scoring |
 
--- Policy: Users can read their own data
-CREATE POLICY "Users can view own data"
-  ON public.users FOR SELECT
-  USING (auth.uid() = id);
+`backend/railway.json` already does the right thing on deploy:
+
+```json
+"startCommand": "alembic upgrade head && uvicorn main:app --host 0.0.0.0 --port $PORT"
 ```
 
-### **Step 2: Deploy Backend to Railway**
+That runs all pending Alembic migrations before starting uvicorn. The
+healthcheck path is `/healthz`.
 
-1. Go to https://railway.app
-2. Click "New Project" → "Deploy from GitHub repo"
-3. Select `RMI Audit Toolkit` repository
-4. Railway will detect `backend/` folder
-5. Add PostgreSQL database:
-   - Click "+ New" → "Database" → "PostgreSQL"
-   - Railway auto-sets `DATABASE_URL`
+### 1.2 Frontend on Railway
 
-6. Set environment variables in Railway:
-```bash
-SECRET_KEY=generate-random-64-char-string-here
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_KEY=your-service-role-key
-FRONTEND_URL=https://your-frontend.railway.app
-```
+Service: **rmi-audit-toolkit-frontend**
 
-7. Deploy! Railway will:
-   - Install Python dependencies
-   - Run database migrations
-   - Start the FastAPI server
+| Var | Value |
+|---|---|
+| `VITE_API_URL` | `https://<your-backend>.up.railway.app` |
+| `VITE_SUPABASE_URL` | same as backend |
+| `VITE_SUPABASE_ANON_KEY` | public anon key (NEVER the service key) |
 
-8. Your backend will be live at: `https://your-backend.railway.app`
+`frontend/railway.json` builds with `tsc && vite build` and serves the
+static `dist/` with `npx serve -s dist`. **It does not use `vite preview`
+(that is a dev preview server, not a production server).**
 
-### **Step 3: Deploy Frontend to Railway**
+### 1.3 Supabase
 
-1. In Railway, click "+ New Service"
-2. Select "GitHub Repo" → Choose `RMI Audit Toolkit`
-3. Set root directory to `frontend/`
-4. Add environment variables:
-```bash
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_ANON_KEY=your-anon-key
-VITE_API_URL=https://your-backend.railway.app
-```
+The backend does not use Supabase Auth (it has its own JWT + bcrypt path).
+Supabase is used for **Storage only** — a private bucket called `evidence`.
 
-5. Deploy! Railway will:
-   - Install npm dependencies
-   - Build React app
-   - Serve with Vite preview
-
-6. Your frontend will be live at: `https://your-frontend.railway.app`
-
-### **Step 4: Initialize Database**
-
-Once backend is deployed, run database initialization:
+To set up the bucket:
 
 ```bash
-# In Railway backend dashboard, go to "Settings" → "Variables"
-# Click "New Variable" and run:
-railway run python init_db.py
+supabase login
+supabase link --project-ref <your-ref>
+bash scripts/setup_supabase_storage.sh
 ```
 
-Or use the Railway CLI:
+The script creates a private bucket and pushes `STORAGE_BACKEND=supabase`
+and `SUPABASE_BUCKET=evidence` to the Railway backend service.
+
+### 1.4 First admin user
+
+After the backend is up and the DB is migrated, seed an initial admin one of
+two ways:
+
+**Option A: env-driven seed (recommended)** — set
+`INITIAL_ADMIN_EMAIL` and `INITIAL_ADMIN_PASSWORD` (≥12 chars), then run:
+
 ```bash
-railway link
-railway run python init_db.py
+railway run --service rmi-audit-toolkit-backend python init_db.py
 ```
 
-This creates:
-- All database tables
-- 16 pre-loaded questions
-- Admin user: `admin@nextbelt.com` / `admin123`
+`init_db.py` skips the admin creation step if those env vars are absent, so
+it is safe to redeploy after the admin exists.
 
-### **Step 5: Link to next-belt.com**
+**Option B: existing admin promotes a teammate** — admins can hit
+`POST /register` from the frontend's user-management UI.
 
-Add a button to your NextBelt website:
+---
 
-```html
-<a href="https://your-frontend.railway.app" 
-   class="btn btn-primary"
-   style="background: #0D4F4F; color: #fff; padding: 16px 24px; border-radius: 4px;">
-  🔧 Launch RMI Audit Tool
-</a>
-```
+## 2. Database migrations (Alembic)
 
-Or create a subdomain:
-1. In Railway, go to frontend service → "Settings" → "Domains"
-2. Add custom domain: `audit.next-belt.com`
-3. Update DNS in your domain registrar:
-   - Type: CNAME
-   - Name: audit
-   - Value: your-frontend.railway.app
+All schema changes go through Alembic. The previous `run_migrations()`
+column-add migrator has been removed.
 
-## 🔧 Local Development
+### 2.1 Day-to-day developer workflow
 
-### Backend
 ```bash
 cd backend
-pip install -r requirements.txt
-python init_db.py
-python main.py
-# Runs at http://localhost:8000
+
+# Edit a model. Then:
+alembic revision --autogenerate -m "describe the change"
+
+# Inspect the generated file in alembic/versions/ — autogenerate is good but
+# not perfect; review it before committing.
+alembic upgrade head           # apply to local DB
+alembic current                # see where the DB is
+alembic history                # see all revisions
+alembic downgrade -1           # roll back one revision (if you must)
 ```
 
-### Frontend
+### 2.2 First Alembic deploy against the existing populated Postgres
+
+The current Railway DB was created by the old `run_migrations()` and already
+has every table the baseline migration would create. Tell Alembic "you're
+already at the baseline" without re-applying DDL:
+
 ```bash
-cd frontend
-npm install
-npm run dev
-# Runs at http://localhost:3000
+railway run --service rmi-audit-toolkit-backend alembic stamp ac8ed3c6f884
 ```
 
-## 🔐 Authentication Flow
+(That hash is the baseline revision; it's also visible via
+`alembic history`.) After that, every Railway redeploy will only apply
+**new** migrations beyond the baseline.
 
-1. **User signs up/logs in** → Supabase Auth handles this
-2. **Supabase returns JWT token** → Frontend stores it
-3. **Frontend makes API requests** → Includes token in headers
-4. **Backend verifies token** → Uses `supabase_auth.py`
-5. **Backend returns data** → Only if token is valid
+### 2.3 New DB (e.g., a staging environment)
 
-## 📊 Monitoring & Logs
+Just deploy. `alembic upgrade head` in the start command creates everything
+from scratch.
 
-- **Railway Dashboard**: View logs, metrics, deployments
-- **Supabase Dashboard**: Monitor auth, database queries
-- **Backend API Docs**: `https://your-backend.railway.app/docs`
+---
 
-## 💰 Costs
+## 3. Storage
 
-- **Supabase**: Free tier (50,000 users, 500MB database)
-- **Railway**: ~$5-20/month depending on usage
-  - Backend: ~$5/month (500MB RAM, 1GB storage)
-  - Frontend: ~$5/month (static hosting)
-  - PostgreSQL: Included with backend
+| Backend | When to use | Behavior |
+|---|---|---|
+| `local` (default) | Local dev only | Writes to `backend/uploads/`. Ephemeral on Railway. |
+| `supabase` | Production | Writes to the private `evidence` bucket; downloads through `GET /uploads/{path}` stream the bytes via the service-role key, with per-assessment RBAC. |
 
-**Total estimated cost**: $10-20/month
+`backend/storage.py` is the only place the backend talks to either backend.
+Swapping to R2/S3 later is a single-file change.
 
-## 🔒 Security Checklist
+Uploaded files are addressed by `assessments/<id>/<kind>/<uuid_filename>`.
+Old Railway local-disk uploads are not migrated automatically — copy them
+out before flipping `STORAGE_BACKEND` if you have any worth keeping.
 
-- [x] Environment variables secured in Railway
-- [x] Supabase Row Level Security enabled
-- [x] CORS configured for production domains
-- [ ] Change default admin password after first login
-- [ ] Enable 2FA for Railway and Supabase accounts
-- [ ] Set up Railway volume for persistent file storage
-- [ ] Configure backup strategy for PostgreSQL
+---
 
-## 📞 Support
+## 4. Rotation runbook
 
-For issues, check:
-- Backend logs: Railway dashboard
-- Frontend console: Browser DevTools
-- Database: Supabase SQL Editor
-- API docs: `/docs` endpoint
+If a secret leaks (or you just want a fresh set), run:
 
-## 🎉 You're Live!
+```bash
+railway login
+railway link
+supabase login
+bash scripts/rotate_secrets.sh
+```
 
-Once deployed:
-1. Visit your frontend URL
-2. Login with: `admin@nextbelt.com` / `admin123`
-3. Create your first assessment
-4. Conduct an audit
-5. Generate a PDF report
+That script rotates `SECRET_KEY`, prompts you for the new Supabase keys (which
+you generate in the Supabase dashboard since service-role rotation is
+dashboard-only), pushes them to Railway, and redeploys both services.
 
-**Your RMI Audit Toolkit is now production-ready!** 🚀
+After running:
+- All existing JWTs are invalid; users must sign back in.
+- The Postgres password change forces the backend's connection pool to
+  reconnect — there will be a few seconds of 5xx during redeploy.
+
+---
+
+## 5. CI / pre-merge checks
+
+`.github/workflows/ci.yml` runs on every push and PR:
+
+- **backend**: `pytest` (39 tests at last count) + `pip-audit`
+- **frontend**: `npm run typecheck`, `npm run lint`, `vite build`, `npm audit`
+- **secret-scan**: fails the build if any file matching
+  `supa_vars*.json` / `*credentials*.json` / `*secrets*.json` is tracked.
+
+---
+
+## 6. Smoke checks after a deploy
+
+```bash
+# Health
+curl https://<backend>.up.railway.app/healthz
+# → {"status":"ok"}
+
+# Login
+curl -d "username=admin@example.com&password=..." \
+     https://<backend>.up.railway.app/token
+# → {"access_token": "...", "token_type": "bearer"}
+
+# Authenticated who-am-I
+TOKEN=...
+curl -H "Authorization: Bearer $TOKEN" https://<backend>.up.railway.app/users/me
+
+# Frontend
+curl -I https://<frontend>.up.railway.app
+# → HTTP/2 200, served by `serve`
+```
+
+---
+
+## 7. Costs (rough)
+
+- **Railway**: backend $5–15/mo, frontend $5/mo, Postgres $5/mo (~$15–25/mo total)
+- **Supabase**: free tier covers <1GB of evidence and <50k Storage requests/mo
+- **OpenAI** (optional): about $0.002 per text-scored response
+
+---
+
+## 8. Security checklist (kept current)
+
+- [x] `SECRET_KEY` is set in Railway and not the default
+- [x] `ENVIRONMENT=production` on the backend service
+- [x] No `supa_vars.json`-shape file in the repo (CI enforces)
+- [x] `STORAGE_BACKEND=supabase` so uploads survive redeploys
+- [x] Bucket is private; signed URLs only for direct browser access
+- [x] CORS restricted to the live frontend URL + localhost dev ports
+- [x] Per-assessment RBAC (admin / creator / explicit member)
+- [x] `/token` rate-limited (10 attempts / min / IP+email)
+- [x] Audit log written for login, user mutations, finalize, scoring
+- [ ] Configure a Railway PG backup schedule (manual today)
+- [ ] Enable 2FA on Railway + Supabase accounts

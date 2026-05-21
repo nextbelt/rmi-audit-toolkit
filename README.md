@@ -1,167 +1,209 @@
 # RMI Audit Toolkit
 
-Professional Reliability Maturity Index (RMI) audit software built by **NextBelt LLC**.
+NextBelt LLC's internal Reliability Maturity Index (RMI) audit platform.
+Used by NextBelt consultants to run scored, evidence-backed reliability
+assessments on client sites and produce executive PDF reports.
 
-## 🎯 What Is This?
+> **Treat this as a client-facing tool even though it is internal.** It holds
+> assessment data tied to named clients. Follow the security policy in
+> [SECURITY.md](#security) when touching auth, secrets, or uploads.
 
-A complete, production-ready web application for conducting professional reliability audits in industrial facilities.
+## Stack
 
-**Tech Stack:**
-- **Backend**: FastAPI (Python) → Railway
-- **Frontend**: React + TypeScript → Railway  
-- **Auth**: Supabase
-- **Database**: PostgreSQL (Railway)
+- **Backend:** FastAPI · SQLAlchemy 2 · Pydantic 2 · bcrypt + JWT
+- **Frontend:** React 18 · TypeScript · Vite · Zustand · Recharts
+- **Database:** PostgreSQL (Railway) · SQLite (local)
+- **Hosting:** Railway (NIXPACKS) — backend via `uvicorn`, frontend via `serve`
+- **Reports:** ReportLab + matplotlib
 
-## ✨ Features
-
-### Core Functionality
-✅ **16 Pre-loaded Questions** across People, Process, Technology pillars  
-✅ **Evidence-Based Scoring** (scores ≥4 require proof - enforced at submission)  
-✅ **AI-Assisted Scoring** - GPT-4o-mini evaluates narrative text responses  
-✅ **CMMS Data Analysis** - Upload work orders for automated metrics  
-✅ **ISO 14224 Validation** - Data quality checks  
-✅ **Field Observations** - Tablet-friendly checklists  
-✅ **Executive Reports** - Auto-generated PDFs with charts  
-✅ **Role-Weighted Scoring** - Technicians 60%, Managers 20%, Auditors 20%  
-
-### 🆕 Data Saving & UX Improvements (Dec 2024)
-✅ **Autosave with Debouncing** - Saves drafts 1 second after typing stops  
-✅ **Save & Exit Fixed** - Now actually saves before navigating away  
-✅ **Evidence Validation** - Blocks high scores without evidence checkbox  
-✅ **N/A (Not Applicable)** - Exclude irrelevant questions from scoring  
-✅ **Offline Queue** - Works in basements/remote sites, syncs when connection restored  
-✅ **Safari Compatibility** - Full support for macOS/iOS Safari browsers  
-
-### Security & Methodology
-✅ **Draft vs Final Responses** - Drafts excluded from RMI calculations  
-✅ **Cleaner Logs** - Suppressed 401 auth noise in terminal  
-✅ **Environment-Based Credentials** - No hardcoded passwords  
-
-## 📁 Project Structure
+## Architecture
 
 ```
-RMI Audit Toolkit/
-├── backend/           # FastAPI backend (Railway)
-│   ├── main.py
-│   ├── models.py
-│   ├── scoring_engine.py
-│   ├── supabase_auth.py
-│   └── railway.json
-├── frontend/          # React frontend (Railway)
-│   ├── src/
-│   ├── railway.json
-│   └── package.json
-└── DEPLOYMENT.md      # Step-by-step deployment guide
+┌────────────┐    HTTPS    ┌──────────────────┐    SQL    ┌──────────┐
+│  Browser   │ ──────────► │ FastAPI backend  │ ────────► │ Postgres │
+│  (React)   │ ◄────────── │  /api/v2/* + auth│ ◄──────── │          │
+└────────────┘             └──────────────────┘           └──────────┘
+                                  │
+                                  ▼
+                          ./uploads/assessments/<id>/cmms/...
+                          (authenticated downloads only)
 ```
 
-## 🚀 Quick Start (Local)
+The product API lives under **`/api/v2/`** (5-domain × 15-subdomain
+framework). The legacy `/assessments/{id}/finalize`, `/generate-report`,
+`/report/download`, and `/analyze-work-orders` routes still exist for
+compatibility with v1 IDs.
 
-**Backend:**
-```bash
+## Local setup
+
+### Backend
+
+```powershell
 cd backend
 pip install -r requirements.txt
-python init_local_db.py  # Creates SQLite database with admin user
-$env:LOCAL_DEV_MODE="true"  # Windows PowerShell
-# export LOCAL_DEV_MODE=true  # Mac/Linux
+
+# REQUIRED — refuses to boot without a strong key in production
+$env:SECRET_KEY = "$(python -c "import secrets; print(secrets.token_urlsafe(48))")"
+$env:ENVIRONMENT = "development"
+
+# Optional: seed the first admin user (skip to add users via /register later)
+$env:INITIAL_ADMIN_EMAIL = "you@example.com"
+$env:INITIAL_ADMIN_PASSWORD = "ALongStrongPassword!2026"
+
+python init_db.py
 python -m uvicorn main:app --reload --port 8000
-# → http://localhost:8000
 ```
 
-**Frontend:**
-```bash
+API → http://localhost:8000 · Swagger UI → http://localhost:8000/docs ·
+Health → http://localhost:8000/healthz
+
+### Frontend
+
+```powershell
 cd frontend
 npm install
 npm run dev
-# → http://localhost:3001 (or 3000)
 ```
 
-**Demo Login:**
-- Email: `admin@local.com`
-- Password: `admin123`
+UI → http://localhost:3000 (proxies API calls to `http://localhost:8000`).
 
-**Database Migration (if updating):**
+## Authentication
+
+- `POST /token` — OAuth2 password flow. Rate-limited per IP+email
+  (`LOGIN_RATE_LIMIT_PER_MIN`, default 10).
+- `GET /users/me` — returns the JWT bearer's user record.
+- `POST /password-reset/request` — issues a 30-minute HMAC-signed reset
+  token. In `ENVIRONMENT=development` the token is returned in the response
+  body; in production it is written to the server log only.
+- `POST /password-reset/confirm` — applies a new password (min 12 chars).
+
+There is no `LOCAL_DEV_MODE`; bcrypt is the only password path.
+
+## Security policy
+
+- **`SECRET_KEY` must be set** in any environment with `ENVIRONMENT=production`.
+  The app refuses to boot if the key is the default or shorter than 32 chars.
+- **No public uploads.** Evidence files are served only via authenticated
+  `GET /uploads/{path}`; files under `uploads/assessments/<id>/` are scoped
+  by per-assessment membership.
+- **Uploads are sanitized.** Filenames are stripped, randomized, and validated
+  against an extension allowlist (`csv, xls, xlsx, pdf, png, jpg, jpeg`).
+  `MAX_UPLOAD_SIZE` is enforced server-side.
+- **Per-assessment RBAC.** A user can read or modify an assessment iff they
+  are an admin, the creator, or an explicit member (`assessment_members`).
+- **Audit log.** Every login, user mutation, password reset, finalize, and
+  scoring call writes to the `audit_log` table.
+- **No committed secrets.** `supa_vars.json` was removed; `.gitignore`
+  excludes any `*vars*.json`, `*secrets*.json`, `*credentials*.json`, and `.env*`.
+
+If you suspect a secret was committed, rotate it immediately:
+1. Railway → Postgres → reset password
+2. Railway → backend service → regenerate `SECRET_KEY`
+3. Supabase → Project Settings → API → rotate `service_role` and `anon` keys
+
+## Scoring policy
+
+See [SCORING_POLICY.md](SCORING_POLICY.md) — every cap, threshold, and weight
+is documented there. The implementation is in
+`backend/scoring_engine_v2.py`.
+
+## Testing
+
+```powershell
+cd backend
+pytest
+```
+
+The suite covers:
+- Login / wrong-password / unknown-user paths (`tests/test_auth_routes.py`)
+- Password reset full flow + token tampering (`tests/test_security_utils.py`,
+  `tests/test_auth_routes.py`)
+- Per-assessment RBAC (`tests/test_rbac.py`)
+- Evidence cap regression (`tests/test_scoring_evidence_cap.py`)
+- SECRET_KEY hardening (`tests/test_secret_check.py`)
+- Upload sanitization, size, extension allowlist (`tests/test_upload_safety.py`)
+
+CI runs the same set on every push/PR (`.github/workflows/ci.yml`) plus
+`pip-audit`, `npm audit`, and a secret-name scan that fails the build if
+files matching `supa_vars*.json` / `*credentials*.json` are ever tracked.
+
+## Deployment
+
+- **Backend:** `backend/railway.json` — `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **Frontend:** `frontend/railway.json` — builds with `tsc && vite build`,
+  serves the static `dist/` with `serve` (NOT `vite preview`).
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the full Railway + Supabase setup.
+
+## Maintenance
+
+- `scripts/cleanup_dead_files.sh` — removes dead one-off backend scripts.
+- `scripts/rotate_secrets.sh` — rotates `SECRET_KEY` + Supabase keys + Railway
+  Postgres password; pushes new values to Railway and redeploys.
+- `scripts/setup_supabase_storage.sh` — creates the private `evidence`
+  bucket and switches the backend to `STORAGE_BACKEND=supabase`.
+
+### Migrations (Alembic)
+
+Schema is owned by Alembic; see [backend/alembic/README.md](backend/alembic/README.md).
+The previous `run_migrations()` shim was removed. On deploy, Railway runs
+`alembic upgrade head` before `uvicorn` (see `backend/railway.json`).
+
 ```bash
 cd backend
-python migrate_add_draft_na.py  # Adds is_draft and is_na columns
+alembic revision --autogenerate -m "describe change"   # after editing a model
+alembic upgrade head
+alembic downgrade -1
 ```
 
-## ☁️ Deployment to Production
+To switch the existing Railway DB to Alembic without re-applying DDL:
 
-See **[DEPLOYMENT.md](DEPLOYMENT.md)** for complete Railway + Supabase setup guide.
+```bash
+railway run --service rmi-audit-toolkit-backend alembic stamp ac8ed3c6f884
+```
 
-**Quick summary:**
-1. Create Supabase project (auth)
-2. Deploy backend to Railway (+ PostgreSQL)
-3. Deploy frontend to Railway
-4. Link from next-belt.com
+### Storage
 
-## 🎨 Design System
+`STORAGE_BACKEND=local` (default, dev) or `supabase` (production). See
+`backend/storage.py`. Files live under
+`assessments/<id>/<kind>/<uuid_filename>` so the per-assessment RBAC in
+`GET /uploads/{path}` can enforce ownership at download time.
 
-Matches NextBelt website:
-- **Colors**: Deep teal (#0D4F4F) + copper (#C65D3B)
-- **Typography**: Space Grotesk + IBM Plex Mono
-- **Style**: Industrial, editorial, clean
+## Module index
 
-## 📊 RMI Methodology
+| Module | Purpose |
+|---|---|
+| `backend/main.py` | App entry, auth, upload download, finalize/report routes |
+| `backend/api_v2.py` | v2 product API (`/api/v2/*`) |
+| `backend/auth.py` | JWT decode middleware |
+| `backend/config.py` | Settings + production secret check |
+| `backend/security_utils.py` | Upload sanitization, rate limiter, reset tokens |
+| `backend/rbac.py` | Per-assessment ownership checks |
+| `backend/audit.py` | Audit log helper |
+| `backend/models.py` | v1 SQLAlchemy models (kept for legacy assessment IDs) |
+| `backend/models_v2.py` | v2 models (domains, subdomains, etc.) |
+| `backend/models_extra.py` | `audit_log` + `assessment_members` |
+| `backend/scoring_engine.py` | v1 scoring (legacy reports only) |
+| `backend/scoring_engine_v2.py` | v2 scoring (current product) |
+| `backend/report_generator.py` | v1 PDF generator (legacy IDs) |
+| `backend/report_generator_v2.py` | v2 PDF generator (subdomain-based) |
+| `backend/routing_engine.py` | Question routing by assessment mode |
+| `backend/benchmarking_engine.py` | Percentile benchmarks |
+| `backend/practice_engine.py` | Practice library + recommendations |
+| `backend/observation_module.py` | Field observation persistence |
+| `backend/data_analysis_module.py` | CMMS work-order analysis |
+| `backend/iso14224_module.py` | ISO 14224 hierarchy quality check |
+| `backend/ai_scoring.py` | Optional GPT-4o-mini text-response scoring |
+| `frontend/src/App.tsx` | Route table + auth header |
+| `frontend/src/api/client.ts` | Auth + shared HTTP client |
+| `frontend/src/api/clientV2.ts` | v2 API client |
+| `frontend/src/api/store.ts` | Auth store (Zustand) |
+| `frontend/src/api/storeV2.ts` | Assessment store (Zustand) |
+| `frontend/src/views/Login.tsx` | Sign-in + password reset flow |
+| `frontend/src/views/DashboardV2.tsx` | Assessment list + create |
+| `frontend/src/views/AssessmentV2Detail.tsx` | Interview, scoring, benchmark, practices |
+| `frontend/src/views/UserManagement.tsx` | Admin user list |
 
-**Three Pillars:**
-1. **People** - Training, culture, knowledge transfer
-2. **Process** - Planning, procedures, PM compliance
-3. **Technology** - CMMS quality, data integrity
+## Built by
 
-**Maturity Levels:**
-- 1 = Reactive (firefighting)
-- 2 = Developing (inconsistent)
-- 3 = Preventive (planned maintenance)
-- 4 = Predictive (data-driven)
-- 5 = Prescriptive (optimized, world-class)
-
-**Scoring Logic:**
-- **Evidence Lock:** Scores ≥4 require proof (enforced at submission, not after-the-fact)
-- **Weakest Link:** Critical failures cap pillar at 3.0 max
-- **Draft Exclusion:** Only final responses count toward RMI score
-- **N/A Handling:** Non-applicable questions excluded from total score calculation
-
-**AI Scoring (Optional):**
-- Uses OpenAI GPT-4o-mini to evaluate narrative text responses
-- Provides 1-5 score + rationale + confidence level
-- Add `OPENAI_API_KEY` to `.env` to enable
-- Costs ~$0.002 per text response
-
-## 🔧 Customization
-
-**Add Questions:**  
-Edit `backend/question_bank.py`
-
-**Customize Reports:**  
-Edit `backend/report_generator.py`
-
-**Adjust Scoring:**  
-Edit `backend/scoring_engine.py`
-
-## 📚 Documentation
-
-### User Guides
-- **Deployment**: [DEPLOYMENT.md](DEPLOYMENT.md) - Railway + production setup
-- **Data Saving**: [DATA_SAVING_IMPROVEMENTS.md](DATA_SAVING_IMPROVEMENTS.md) - Autosave, N/A, offline queue
-- **Safari Issues**: [SAFARI_COMPATIBILITY.md](SAFARI_COMPATIBILITY.md) - Troubleshooting for Safari users
-
-### Technical References
-- **Backend**: `backend/README.md`
-- **Frontend**: `frontend/README.md`
-- **Roadmap**: [IMPLEMENTATION_ROADMAP.md](IMPLEMENTATION_ROADMAP.md) - Security fixes & methodology improvements
-- **API Docs**: `/docs` endpoint (Swagger UI)
-
-### Testing
-- **Database Migration**: `backend/migrate_add_draft_na.py`
-- **Data Validation**: `backend/test_data_saving.py`
-
-## 📞 Support
-
-Built by **NextBelt LLC**  
-🌐 https://next-belt.com  
-📧 nextbelt@next-belt.com
-
----
-
-**Ready to conduct world-class reliability audits!** 🚀
+NextBelt LLC · https://next-belt.com · nextbelt@next-belt.com

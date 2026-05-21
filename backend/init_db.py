@@ -1,57 +1,102 @@
 """
-Database Initialization Script
-Run this to set up the database and seed the question bank
+Database initialization.
+
+Creates tables, registers v1 + v2 metadata, seeds the question bank, practices,
+and benchmark peer data. Will only create a default admin user when both
+INITIAL_ADMIN_EMAIL and INITIAL_ADMIN_PASSWORD environment variables are set.
+
+Usage:
+    INITIAL_ADMIN_EMAIL=you@example.com \\
+    INITIAL_ADMIN_PASSWORD='a-long-strong-password' \\
+    python init_db.py
 """
-from database import init_db, SessionLocal
-from question_bank import seed_question_bank
+from __future__ import annotations
+
+import logging
+import sys
+
+import bcrypt
+
+import models_extra  # noqa: F401 -- registers audit_log + assessment_members
+import models_v2  # noqa: F401 -- registers v2 tables
+from config import settings
+from database import SessionLocal, init_db
 from models import User
-from passlib.context import CryptContext
+from question_bank import seed_question_bank
+from question_bank_v2 import seed_domains_and_subdomains, seed_question_bank_v2
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+log = logging.getLogger("init_db")
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
 
-def initialize_database():
-    """Initialize database with tables and seed data"""
-    print("🔧 Initializing database...")
-    
-    # Create tables
+def initialize_database() -> None:
+    log.info("Creating tables…")
     init_db()
-    print("✅ Database tables created")
-    
-    # Seed question bank
+
     db = SessionLocal()
     try:
-        print("🔧 Seeding question bank...")
-        count = seed_question_bank(db)
-        print(f"✅ Seeded {count} questions")
-        
-        # Create default admin user
-        print("🔧 Creating default admin user...")
-        admin_exists = db.query(User).filter(User.email == "admin@nextbelt.com").first()
-        
-        if not admin_exists:
-            admin_user = User(
-                email="admin@nextbelt.com",
-                hashed_password=pwd_context.hash("admin123"),  # Change in production!
-                full_name="System Administrator",
-                role="admin",
-                is_active=True
-            )
-            db.add(admin_user)
-            db.commit()
-            print("✅ Admin user created (email: admin@nextbelt.com, password: admin123)")
+        log.info("Seeding v1 question bank…")
+        seed_question_bank(db)
+        log.info("Seeding v2 domains + subdomains…")
+        seed_domains_and_subdomains(db)
+        log.info("Seeding v2 question bank…")
+        seed_question_bank_v2(db)
+
+        if settings.INITIAL_ADMIN_EMAIL and settings.INITIAL_ADMIN_PASSWORD:
+            if len(settings.INITIAL_ADMIN_PASSWORD) < 12:
+                log.error("INITIAL_ADMIN_PASSWORD must be at least 12 characters.")
+                sys.exit(2)
+            existing = db.query(User).filter(User.email == settings.INITIAL_ADMIN_EMAIL).first()
+            if existing:
+                log.info("Admin user already exists; skipping.")
+            else:
+                admin = User(
+                    email=settings.INITIAL_ADMIN_EMAIL,
+                    hashed_password=_hash(settings.INITIAL_ADMIN_PASSWORD),
+                    full_name="System Administrator",
+                    role="admin",
+                    is_active=True,
+                )
+                db.add(admin)
+                db.commit()
+                log.info("Created admin %s", settings.INITIAL_ADMIN_EMAIL)
         else:
-            print("ℹ️  Admin user already exists")
-        
+            log.warning(
+                "INITIAL_ADMIN_EMAIL / INITIAL_ADMIN_PASSWORD not set — skipping admin seed. "
+                "Set them in the environment to create the first admin user."
+            )
     finally:
         db.close()
-    
-    print("\n✅ Database initialization complete!")
-    print("\n📊 Next steps:")
-    print("1. Run the API server: python main.py")
-    print("2. Access API docs: http://localhost:8000/docs")
-    print("3. Login with: admin@nextbelt.com / admin123")
+
+    try:
+        from seed_practices import seed_practices
+
+        db2 = SessionLocal()
+        try:
+            log.info("Seeding practice library…")
+            seed_practices(db2)
+        finally:
+            db2.close()
+    except Exception as exc:
+        log.warning("Practice seeding skipped: %s", exc)
+
+    try:
+        from seed_benchmark import seed_benchmark_peers
+
+        db3 = SessionLocal()
+        try:
+            log.info("Seeding benchmark peer data…")
+            seed_benchmark_peers(db3)
+        finally:
+            db3.close()
+    except Exception as exc:
+        log.warning("Benchmark seeding skipped: %s", exc)
+
+    log.info("Database initialization complete.")
 
 
 if __name__ == "__main__":
