@@ -1,6 +1,6 @@
 /**
- * RMI vNext API Client (v2)
- * All endpoints under /api/v2/
+ * RMI Assessments API Client
+ * All endpoints under /api/v2/ (route prefix is historical).
  */
 import api from "./client";
 
@@ -37,6 +37,7 @@ export interface AssessmentV2 {
   overall_rmi: number | null;
   maturity_level: string | null;
   confidence_score: number | null;
+  finalized_at?: string | null;
 }
 
 export interface QuestionV2 {
@@ -170,6 +171,68 @@ export interface PracticeDetail {
   references: any;
   industry_variations: any;
   tools: any;
+}
+
+export interface ISOClauseResult {
+  clause: string;
+  name: string;
+  score: number | null;
+  gap: number | null;
+  status: "ready" | "exceeds" | "gap" | "major_gap" | "unanswered" | "unmapped";
+  questions_total: number;
+  questions_answered: number;
+  low_questions: Array<{ id: number; code: string; text: string; score: number }>;
+}
+
+export interface ISOSection {
+  section: string;
+  title: string;
+  ready: number;
+  total: number;
+  clauses: ISOClauseResult[];
+}
+
+export interface ISOGapReport {
+  assessment_id: number;
+  floor: number;
+  summary: {
+    total_clauses_mapped: number;
+    clauses_ready: number;
+    clauses_with_gap: number;
+    clauses_major_gap: number;
+    overall_readiness_pct: number;
+  };
+  sections: ISOSection[];
+}
+
+export interface EvidenceFileMeta {
+  filename: string | null;
+  mime: string | null;
+  size_bytes: number | null;
+  uploaded_at: string | null;
+}
+
+export interface AIEvidenceAnalysis {
+  suggested_score: number | null;
+  observations: string;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  key_findings: string[];
+  analyzed_kind: "image" | "pdf" | "unsupported";
+  analyzed_at: string;
+}
+
+export interface CMMSUpload {
+  id: number;
+  assessment_id: number;
+  kind: "work_orders" | "pm";
+  original_filename: string | null;
+  file_size_bytes: number | null;
+  status: "processed" | "processing" | "error";
+  error_message: string | null;
+  metrics: Record<string, any> | null;
+  bad_actors: Array<[string, number]> | null;
+  record_count: number | null;
+  uploaded_at: string;
 }
 
 // ═══════════════════════════════════════════
@@ -379,6 +442,91 @@ export const v2API = {
 
   getSubdomainPractices: async (subdomainCode: string) => {
     const r = await api.get(`/api/v2/practices/subdomain/${subdomainCode}`);
+    return r.data;
+  },
+
+  // ── ISO 55001 gap report ──
+  getISOGapReport: async (assessmentId: number): Promise<ISOGapReport> => {
+    const r = await api.get(`/api/v2/assessments/${assessmentId}/iso-55001-gaps`);
+    return r.data;
+  },
+
+  // ── Evidence ──
+  uploadEvidence: async (
+    assessmentId: number,
+    questionId: number,
+    file: File,
+  ): Promise<{
+    filename: string;
+    mime: string;
+    size_bytes: number;
+    uploaded_at: string;
+    evidence_status: string | null;
+  }> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    const r = await api.post(
+      `/api/v2/assessments/${assessmentId}/responses/${questionId}/evidence`,
+      fd,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return r.data;
+  },
+
+  fetchEvidenceBlob: async (
+    assessmentId: number,
+    questionId: number,
+  ): Promise<Blob> => {
+    const r = await api.get(
+      `/api/v2/assessments/${assessmentId}/responses/${questionId}/evidence`,
+      { responseType: "blob" },
+    );
+    return r.data;
+  },
+
+  deleteEvidence: async (assessmentId: number, questionId: number) => {
+    const r = await api.delete(
+      `/api/v2/assessments/${assessmentId}/responses/${questionId}/evidence`,
+    );
+    return r.data;
+  },
+
+  analyzeEvidence: async (
+    assessmentId: number,
+    questionId: number,
+  ): Promise<AIEvidenceAnalysis> => {
+    const r = await api.post(
+      `/api/v2/assessments/${assessmentId}/responses/${questionId}/analyze-evidence`,
+    );
+    return r.data;
+  },
+
+  // ── CMMS snapshot ──
+  uploadCMMS: async (
+    assessmentId: number,
+    file: File,
+    kind: "work_orders" | "pm" = "work_orders",
+  ): Promise<CMMSUpload> => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("kind", kind);
+    const r = await api.post(
+      `/api/v2/assessments/${assessmentId}/cmms-uploads`,
+      fd,
+      { headers: { "Content-Type": "multipart/form-data" } },
+    );
+    return r.data;
+  },
+
+  listCMMSUploads: async (assessmentId: number): Promise<CMMSUpload[]> => {
+    const r = await api.get(`/api/v2/assessments/${assessmentId}/cmms-uploads`);
+    return r.data;
+  },
+
+  deleteCMMSUpload: async (assessmentId: number, uploadId: number) => {
+    const r = await api.delete(
+      `/api/v2/assessments/${assessmentId}/cmms-uploads/${uploadId}`,
+    );
     return r.data;
   },
 
