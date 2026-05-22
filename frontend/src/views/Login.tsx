@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../api/store';
 import { authAPI } from '../api/client';
-import { Input, Button, Card } from '../components';
+import { Input, Button } from '../components';
 
 type Mode = 'login' | 'reset_request' | 'reset_confirm';
 
@@ -24,7 +24,7 @@ export const Login: React.FC = () => {
       await login(email, password);
       navigate('/dashboard');
     } catch {
-      // Error already in store
+      /* Error already in store */
     }
   };
 
@@ -38,9 +38,7 @@ export const Login: React.FC = () => {
         'If that email is registered, a password reset token has been issued. ' +
           'Check the system log (production) or paste the debug token below (development) to set a new password.',
       );
-      if (r.debug_token) {
-        setDebugToken(r.debug_token);
-      }
+      if (r.debug_token) setDebugToken(r.debug_token);
       setMode('reset_confirm');
     } catch {
       setResetStatus('Could not start password reset. Try again.');
@@ -64,24 +62,44 @@ export const Login: React.FC = () => {
     }
   };
 
-  const box: React.CSSProperties = {
-    minHeight: '100vh',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    background: '#FAFAFA',
-    padding: '24px',
-  };
-
   return (
-    <div style={box}>
-      <Card style={{ maxWidth: 460, width: '100%', boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}>
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <h1 style={{ fontSize: '1.75rem', marginBottom: 8, fontWeight: 600, color: '#1A1A1A' }}>
-            RMI Audit Toolkit
+    <div
+      style={{
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg)',
+        padding: 24,
+      }}
+    >
+      <div
+        className="card"
+        style={{
+          maxWidth: 460,
+          width: '100%',
+          padding: 36,
+          boxShadow: '0 18px 60px rgba(27, 31, 29, 0.10)',
+        }}
+      >
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div
+            className="brand-mark"
+            style={{ width: 44, height: 44, fontSize: 15, margin: '0 auto 16px' }}
+          >
+            RMI
+          </div>
+          <h1
+            className="serif"
+            style={{ fontSize: 36, margin: 0, color: 'var(--ink)' }}
+          >
+            <em>RMI</em> Audit Toolkit
           </h1>
-          <p style={{ color: '#666', fontSize: '0.8125rem', fontFamily: "'IBM Plex Mono', monospace", letterSpacing: '0.04em' }}>
-            NextBelt LLC
+          <p
+            className="mono"
+            style={{ color: 'var(--muted)', fontSize: 11, marginTop: 8, letterSpacing: '0.06em' }}
+          >
+            by NextBelt LLC
           </p>
         </div>
 
@@ -112,13 +130,14 @@ export const Login: React.FC = () => {
                 style={{
                   position: 'absolute',
                   right: 12,
-                  top: 38,
+                  top: 34,
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '0.875rem',
-                  color: '#666',
+                  fontSize: 12,
+                  color: 'var(--muted)',
                   padding: 4,
+                  fontFamily: 'inherit',
                 }}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -127,44 +146,55 @@ export const Login: React.FC = () => {
             </div>
 
             {error && (
-              <div style={{
-                padding: '12px 16px',
-                background: 'rgba(197, 48, 48, 0.06)',
-                border: '1px solid rgba(197, 48, 48, 0.25)',
-                borderRadius: 6,
-                color: '#C53030',
-                fontSize: '0.8125rem',
-                marginBottom: 24,
-              }}>
+              <div
+                style={{
+                  padding: '12px 14px',
+                  background: 'rgba(194, 83, 60, 0.06)',
+                  border: '1px solid rgba(194, 83, 60, 0.30)',
+                  borderRadius: 8,
+                  color: 'var(--danger)',
+                  fontSize: 12.5,
+                  marginBottom: 16,
+                }}
+              >
                 {error}
               </div>
             )}
 
             {resetStatus && (
-              <div style={{
-                padding: 12,
-                background: 'rgba(15, 111, 111, 0.06)',
-                border: '1px solid rgba(15, 111, 111, 0.25)',
-                borderRadius: 6,
-                color: '#0F6F6F',
-                fontSize: '0.8125rem',
-                marginBottom: 16,
-              }}>
+              <div
+                style={{
+                  padding: 12,
+                  background: 'var(--accent-soft)',
+                  border: '1px solid rgba(14, 110, 98, 0.30)',
+                  borderRadius: 8,
+                  color: 'var(--accent)',
+                  fontSize: 12.5,
+                  marginBottom: 16,
+                }}
+              >
                 {resetStatus}
               </div>
             )}
 
-            <Button type="submit" fullWidth loading={isLoading} disabled={isLoading}>
+            <Button type="submit" fullWidth loading={isLoading} disabled={isLoading} size="lg">
               Sign In
             </Button>
 
             <div style={{ textAlign: 'center', marginTop: 16 }}>
               <button
                 type="button"
-                onClick={() => { setMode('reset_request'); setResetStatus(null); }}
+                onClick={() => {
+                  setMode('reset_request');
+                  setResetStatus(null);
+                }}
                 style={{
-                  background: 'transparent', border: 'none', color: '#0F6F6F',
-                  fontSize: '0.8125rem', cursor: 'pointer',
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--accent)',
+                  fontSize: 12.5,
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
                 }}
               >
                 Forgot Password?
@@ -175,9 +205,12 @@ export const Login: React.FC = () => {
 
         {mode === 'reset_request' && (
           <form onSubmit={handleResetRequest}>
-            <h2 style={{ fontSize: '1.125rem', marginBottom: 12, color: '#1A1A1A' }}>Reset Password</h2>
-            <p style={{ color: '#666', fontSize: '0.8125rem', marginBottom: 24 }}>
-              Enter your email. We will issue a reset token; an administrator can hand it to you, or it will be in the server log.
+            <h2 className="serif" style={{ fontSize: 24, marginBottom: 10, color: 'var(--ink)' }}>
+              Reset Password
+            </h2>
+            <p style={{ color: 'var(--muted)', fontSize: 12.5, marginBottom: 22 }}>
+              Enter your email. We will issue a reset token; an administrator can hand it to you,
+              or it will be in the server log.
             </p>
 
             <Input
@@ -189,34 +222,45 @@ export const Login: React.FC = () => {
             />
 
             {resetStatus && (
-              <div style={{ marginBottom: 16, fontSize: '0.8125rem', color: '#666' }}>{resetStatus}</div>
+              <div style={{ marginBottom: 16, fontSize: 12.5, color: 'var(--muted)' }}>
+                {resetStatus}
+              </div>
             )}
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <Button type="submit" fullWidth>Request Token</Button>
-              <Button type="button" variant="outline" fullWidth onClick={() => setMode('login')}>Cancel</Button>
+              <Button type="submit" fullWidth>
+                Request Token
+              </Button>
+              <Button type="button" variant="outline" fullWidth onClick={() => setMode('login')}>
+                Cancel
+              </Button>
             </div>
           </form>
         )}
 
         {mode === 'reset_confirm' && (
           <form onSubmit={handleResetConfirm}>
-            <h2 style={{ fontSize: '1.125rem', marginBottom: 12, color: '#1A1A1A' }}>Set New Password</h2>
-            <p style={{ color: '#666', fontSize: '0.8125rem', marginBottom: 16 }}>
+            <h2 className="serif" style={{ fontSize: 24, marginBottom: 10, color: 'var(--ink)' }}>
+              Set New Password
+            </h2>
+            <p style={{ color: 'var(--muted)', fontSize: 12.5, marginBottom: 16 }}>
               {resetStatus || 'Paste the reset token and choose a new password (minimum 12 characters).'}
             </p>
 
             {debugToken && (
-              <div style={{
-                padding: 12,
-                background: 'rgba(15, 111, 111, 0.06)',
-                border: '1px solid rgba(15, 111, 111, 0.25)',
-                borderRadius: 6,
-                marginBottom: 16,
-                fontSize: '0.75rem',
-                fontFamily: "'IBM Plex Mono', monospace",
-                wordBreak: 'break-all',
-              }}>
+              <div
+                className="mono"
+                style={{
+                  padding: 12,
+                  background: 'var(--accent-soft)',
+                  border: '1px solid rgba(14, 110, 98, 0.30)',
+                  borderRadius: 8,
+                  marginBottom: 16,
+                  fontSize: 11.5,
+                  wordBreak: 'break-all',
+                  color: 'var(--accent)',
+                }}
+              >
                 <strong>Dev-mode token:</strong> {debugToken}
               </div>
             )}
@@ -237,12 +281,16 @@ export const Login: React.FC = () => {
             />
 
             <div style={{ display: 'flex', gap: 12 }}>
-              <Button type="submit" fullWidth>Update Password</Button>
-              <Button type="button" variant="outline" fullWidth onClick={() => setMode('login')}>Cancel</Button>
+              <Button type="submit" fullWidth>
+                Update Password
+              </Button>
+              <Button type="button" variant="outline" fullWidth onClick={() => setMode('login')}>
+                Cancel
+              </Button>
             </div>
           </form>
         )}
-      </Card>
+      </div>
     </div>
   );
 };

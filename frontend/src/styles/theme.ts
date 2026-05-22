@@ -1,55 +1,56 @@
 /**
- * NextBelt Design System — Clean Enterprise
- * Neutral whites · cool grays · teal accent
- * Inspired by SMMS Enterprise
+ * RMI Audit Toolkit — Design Tokens
+ * Cream surfaces · Pine accent · Serif headlines
  */
 
 export const theme = {
   colors: {
-    // Primary — Teal
-    primary: '#0F6F6F',
-    primaryLight: '#1A8A8A',
-    primaryDark: '#0A4E4E',
-    primaryGlow: 'rgba(15, 111, 111, 0.08)',
-    
-    // Accent — Copper (secondary CTA)
-    accent: '#C0603F',
+    // Primary — Pine / teal
+    primary: '#0E6E62',
+    primaryLight: '#15877a',
+    primaryDark: '#124d45',
+    primaryGlow: 'rgba(14, 110, 98, 0.12)',
+
+    // Accent — Clay (secondary)
+    accent: '#C2533C',
     accentLight: '#D4714F',
-    accentDark: '#9A4A2E',
-    accentGlow: 'rgba(192, 96, 63, 0.08)',
-    
-    // Surfaces — pure white + neutral gray
-    bgBase: '#FAFAFA',
+    accentDark: '#9A3D2A',
+    accentGlow: 'rgba(194, 83, 60, 0.10)',
+
+    // Surfaces — cream + white
+    bgBase: '#F6F4EF',
     bgRaised: '#FFFFFF',
     bgCard: '#FFFFFF',
-    bgCardHover: '#F5F5F5',
-    bgSurface: '#F0F0F0',
+    bgCardHover: '#FAF8F3',
+    bgSurface: '#FAF8F3',
     bgInput: '#FFFFFF',
-    
-    // Text — neutral dark
-    text: '#333333',
-    textSecondary: '#666666',
-    textMuted: '#999999',
-    textHeading: '#1A1A1A',
-    
-    // Borders — cool gray
-    border: '#E5E5E5',
-    borderHover: '#D0D0D0',
-    borderActive: 'rgba(15, 111, 111, 0.5)',
-    
-    // Status colors
-    success: '#0D8A5E',
-    successBg: 'rgba(13, 138, 94, 0.06)',
-    warning: '#B8860B',
-    warningBg: 'rgba(184, 134, 11, 0.06)',
-    error: '#C53030',
-    errorBg: 'rgba(197, 48, 48, 0.05)',
-    
+
+    // Text — ink scale
+    text: '#1B1F1D',
+    textSecondary: '#3C423F',
+    textMuted: '#7A807D',
+    textMutedSoft: '#9AA09D',
+    textHeading: '#1B1F1D',
+
+    // Borders — warm cream
+    border: '#E6E2D8',
+    borderSoft: '#ECE8DE',
+    borderHover: '#9AA09D',
+    borderActive: 'rgba(14, 110, 98, 0.5)',
+
+    // Status
+    success: '#2F8A6B',
+    successBg: 'rgba(47, 138, 107, 0.10)',
+    warning: '#C08A2E',
+    warningBg: 'rgba(192, 138, 46, 0.10)',
+    error: '#C2533C',
+    errorBg: 'rgba(194, 83, 60, 0.08)',
+
     // Glass
     glassBg: 'rgba(255, 255, 255, 0.92)',
-    glassBorder: '#E5E5E5',
+    glassBorder: '#E6E2D8',
   },
-  
+
   spacing: {
     xs: '4px',
     sm: '8px',
@@ -59,11 +60,12 @@ export const theme = {
     '2xl': '64px',
     '3xl': '100px',
   },
-  
+
   typography: {
     fontFamily: {
       primary: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      mono: "'IBM Plex Mono', monospace",
+      serif: "'Instrument Serif', serif",
+      mono: "'JetBrains Mono', monospace",
     },
     fontSize: {
       xs: '0.75rem',
@@ -84,23 +86,23 @@ export const theme = {
       bold: 700,
     },
   },
-  
+
   radius: {
-    sm: '4px',
-    md: '8px',
-    lg: '12px',
-    xl: '16px',
+    sm: '8px',
+    md: '12px',
+    lg: '16px',
+    xl: '20px',
   },
-  
+
   shadows: {
-    sm: '0 1px 2px rgba(0, 0, 0, 0.05)',
-    md: '0 2px 8px rgba(0, 0, 0, 0.06)',
-    lg: '0 4px 16px rgba(0, 0, 0, 0.08)',
-    glow: '0 0 20px rgba(15, 111, 111, 0.05)',
-    glowAccent: '0 0 20px rgba(192, 96, 63, 0.05)',
+    sm: '0 1px 2px rgba(27, 31, 29, 0.04)',
+    md: '0 2px 8px rgba(27, 31, 29, 0.06)',
+    lg: '0 8px 30px rgba(27, 31, 29, 0.10)',
+    glow: '0 0 20px rgba(14, 110, 98, 0.08)',
+    glowAccent: '0 0 20px rgba(194, 83, 60, 0.08)',
   },
-  
-  transition: '0.2s ease',
+
+  transition: '0.15s ease',
 };
 
 export type Theme = typeof theme;

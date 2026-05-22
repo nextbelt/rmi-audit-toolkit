@@ -252,6 +252,19 @@ class ResponseV2(Base):
     evidence_notes = Column(Text, nullable=True)
     evidence_grade = Column(String(1), nullable=True)  # A, B, C, D
 
+    # Evidence file (uploaded by user; serialized StoredObject path)
+    evidence_file_path = Column(String(500), nullable=True)
+    evidence_filename = Column(String(255), nullable=True)
+    evidence_mime = Column(String(120), nullable=True)
+    evidence_size_bytes = Column(Integer, nullable=True)
+    evidence_uploaded_at = Column(DateTime, nullable=True)
+
+    # AI analysis of the uploaded evidence
+    ai_suggested_score = Column(Float, nullable=True)
+    ai_observations = Column(Text, nullable=True)
+    ai_confidence = Column(String(10), nullable=True)  # HIGH / MEDIUM / LOW
+    ai_analyzed_at = Column(DateTime, nullable=True)
+
     # Flags
     is_draft = Column(Boolean, default=False)
     is_na = Column(Boolean, default=False)
@@ -382,3 +395,39 @@ class CalibrationExercise(Base):
     completed_at = Column(DateTime, default=datetime.utcnow)
 
     auditor = relationship("User")
+
+
+class CMSSUploadKind(str, enum.Enum):
+    """CMMS snapshot kinds the analyzer understands."""
+    WORK_ORDERS = "work_orders"
+    PM = "pm"
+
+
+class CMMSUploadV2(Base):
+    """
+    A CMMS data snapshot attached to a vNext assessment.
+
+    The analyzer in data_analysis_module.py parses the file, computes reactive
+    ratio / PM compliance / data-graveyard metrics, and stores them in
+    `metrics` JSON. Scoring engine reads these to boost or cap relevant
+    subdomains (AI.1, WM.2).
+    """
+    __tablename__ = "cmms_uploads_v2"
+
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_id = Column(Integer, ForeignKey("assessments_v2.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    kind = Column(String(20), nullable=False)  # work_orders | pm
+    file_path = Column(String(500), nullable=False)
+    original_filename = Column(String(255), nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
+
+    status = Column(String(20), nullable=False, default="processed")  # processed | error
+    error_message = Column(Text, nullable=True)
+
+    metrics = Column(JSON, nullable=True)
+    bad_actors = Column(JSON, nullable=True)
+    record_count = Column(Integer, nullable=True)
+
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)

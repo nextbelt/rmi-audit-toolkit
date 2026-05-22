@@ -12,6 +12,11 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Polling fallback for OneDrive / network folders where native fs watching is unreliable
+    watch: {
+      usePolling: true,
+      interval: 400,
+    },
   },
   preview: {
     allowedHosts: [

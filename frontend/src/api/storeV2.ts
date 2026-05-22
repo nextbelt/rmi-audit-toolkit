@@ -1,6 +1,6 @@
 /**
- * RMI vNext Assessment Store (Zustand)
- * Manages v2 assessment state, scoring, benchmarks, and practice recommendations.
+ * RMI Assessment Store (Zustand)
+ * Manages assessment state, scoring, benchmarks, and practice recommendations.
  */
 import { create } from 'zustand';
 import { v2API } from './clientV2';
@@ -13,6 +13,8 @@ import type {
   PracticeRecommendation,
   RecommendationsResponse,
   DomainInfo,
+  AIEvidenceAnalysis,
+  CMMSUpload,
 } from './clientV2';
 
 interface V2State {
@@ -33,6 +35,24 @@ interface V2State {
 
   // Saved responses (loaded from backend)
   savedResponses: Record<number, { score: number; notes: string }>;
+
+  // Evidence + CMMS state (keyed per question / assessment)
+  responseExtras: Record<number, {
+    evidence_file?: {
+      filename: string | null;
+      mime: string | null;
+      size_bytes: number | null;
+      uploaded_at: string | null;
+    } | null;
+    ai_analysis?: {
+      suggested_score: number | null;
+      observations: string | null;
+      confidence: string | null;
+      analyzed_at: string | null;
+    } | null;
+  }>;
+  cmmsUploads: CMMSUpload[];
+  cmmsLoading: boolean;
 
   // Scoring
   scoringResult: ScoringResult | null;
@@ -80,6 +100,17 @@ interface V2State {
   loadBenchmark: (assessmentId: number) => Promise<void>;
   loadRecommendations: (assessmentId: number) => Promise<void>;
   upgradeMode: (assessmentId: number, newMode: string) => Promise<void>;
+
+  // Evidence
+  uploadEvidence: (assessmentId: number, questionId: number, file: File) => Promise<void>;
+  deleteEvidence: (assessmentId: number, questionId: number) => Promise<void>;
+  analyzeEvidence: (assessmentId: number, questionId: number) => Promise<AIEvidenceAnalysis>;
+
+  // CMMS
+  loadCMMSUploads: (assessmentId: number) => Promise<void>;
+  uploadCMMS: (assessmentId: number, file: File, kind: 'work_orders' | 'pm') => Promise<CMMSUpload>;
+  deleteCMMSUpload: (assessmentId: number, uploadId: number) => Promise<void>;
+
   clearError: () => void;
   reset: () => void;
 }
@@ -95,6 +126,9 @@ const initialState = {
   progress: null,
   questionsLoading: false,
   savedResponses: {},
+  responseExtras: {},
+  cmmsUploads: [],
+  cmmsLoading: false,
   scoringResult: null,
   scoringLoading: false,
   benchmark: null,
@@ -171,15 +205,22 @@ export const useV2Store = create<V2State>((set, get) => ({
     try {
       const raw = await v2API.getResponses(assessmentId);
       const mapped: Record<number, { score: number; notes: string }> = {};
-      for (const r of raw) {
+      const extras: Record<number, any> = {};
+      for (const r of raw as any[]) {
         if (r.numeric_score != null) {
           mapped[r.question_id] = {
             score: r.numeric_score,
             notes: r.evidence_notes || '',
           };
         }
+        if (r.evidence_file || r.ai_analysis) {
+          extras[r.question_id] = {
+            evidence_file: r.evidence_file ?? null,
+            ai_analysis: r.ai_analysis ?? null,
+          };
+        }
       }
-      set({ savedResponses: mapped });
+      set({ savedResponses: mapped, responseExtras: extras });
       return mapped;
     } catch (e: any) {
       set({ error: e.message || 'Failed to load responses' });
@@ -255,6 +296,99 @@ export const useV2Store = create<V2State>((set, get) => ({
       set({ currentAssessment: assessment });
     } catch (e: any) {
       set({ error: e.message || 'Failed to upgrade mode' });
+    }
+  },
+
+  uploadEvidence: async (assessmentId, questionId, file) => {
+    try {
+      const meta = await v2API.uploadEvidence(assessmentId, questionId, file);
+      set((s) => ({
+        responseExtras: {
+          ...s.responseExtras,
+          [questionId]: {
+            ...(s.responseExtras[questionId] || {}),
+            evidence_file: {
+              filename: meta.filename,
+              mime: meta.mime,
+              size_bytes: meta.size_bytes,
+              uploaded_at: meta.uploaded_at,
+            },
+            ai_analysis: null, // stale once new file is uploaded
+          },
+        },
+      }));
+    } catch (e: any) {
+      set({ error: e?.response?.data?.detail || e.message || 'Failed to upload evidence' });
+      throw e;
+    }
+  },
+
+  deleteEvidence: async (assessmentId, questionId) => {
+    try {
+      await v2API.deleteEvidence(assessmentId, questionId);
+      set((s) => {
+        const next = { ...s.responseExtras };
+        delete next[questionId];
+        return { responseExtras: next };
+      });
+    } catch (e: any) {
+      set({ error: e?.response?.data?.detail || e.message || 'Failed to delete evidence' });
+      throw e;
+    }
+  },
+
+  analyzeEvidence: async (assessmentId, questionId) => {
+    try {
+      const result = await v2API.analyzeEvidence(assessmentId, questionId);
+      set((s) => ({
+        responseExtras: {
+          ...s.responseExtras,
+          [questionId]: {
+            ...(s.responseExtras[questionId] || {}),
+            ai_analysis: {
+              suggested_score: result.suggested_score,
+              observations: result.observations,
+              confidence: result.confidence,
+              analyzed_at: result.analyzed_at,
+            },
+          },
+        },
+      }));
+      return result;
+    } catch (e: any) {
+      set({ error: e?.response?.data?.detail || e.message || 'AI analysis failed' });
+      throw e;
+    }
+  },
+
+  loadCMMSUploads: async (assessmentId) => {
+    set({ cmmsLoading: true });
+    try {
+      const list = await v2API.listCMMSUploads(assessmentId);
+      set({ cmmsUploads: list, cmmsLoading: false });
+    } catch (e: any) {
+      set({ error: e.message || 'Failed to load CMMS uploads', cmmsLoading: false });
+    }
+  },
+
+  uploadCMMS: async (assessmentId, file, kind) => {
+    try {
+      const upload = await v2API.uploadCMMS(assessmentId, file, kind);
+      set((s) => ({ cmmsUploads: [upload, ...s.cmmsUploads] }));
+      return upload;
+    } catch (e: any) {
+      set({ error: e?.response?.data?.detail || e.message || 'Failed to upload CMMS snapshot' });
+      throw e;
+    }
+  },
+
+  deleteCMMSUpload: async (assessmentId, uploadId) => {
+    try {
+      await v2API.deleteCMMSUpload(assessmentId, uploadId);
+      set((s) => ({ cmmsUploads: s.cmmsUploads.filter((u) => u.id !== uploadId) }));
+    } catch (e: any) {
+      set({ error: e?.response?.data?.detail || e.message || 'Failed to delete CMMS upload' });
+      throw e;
     }
   },
 

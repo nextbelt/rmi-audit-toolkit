@@ -12,7 +12,8 @@ import json
 from models_v2 import (
     AssessmentV2, ResponseV2, QuestionV2, SubdomainScore,
     Subdomain, Domain, DomainType, SubdomainType,
-    AssessmentMode, EvidenceStatus, TargetRoleV2
+    AssessmentMode, EvidenceStatus, TargetRoleV2,
+    CMMSUploadV2,
 )
 
 
@@ -120,6 +121,9 @@ class ScoringEngineV2:
         # ── Step 2: Apply critical-failure caps (question-level) ──
         caps_applied += self._apply_critical_caps(assessment_id, subdomain_results)
 
+        # ── Step 2.5: Apply CMMS-evidence caps ──
+        caps_applied += self._apply_cmms_evidence_caps(assessment_id, subdomain_results)
+
         # ── Step 3: Aggregate to domain scores ──
         domain_results: Dict[str, Dict] = {}
         domains = self.db.query(Domain).order_by(Domain.display_order).all()
@@ -212,11 +216,13 @@ class ScoringEngineV2:
 
         if not responses:
             return {"raw_score": None, "final_score": None, "response_count": 0,
-                    "evidence_blocked": 0, "cap_applied": False, "cap_reason": None}
+                    "evidence_blocked": 0, "evidence_blocked_questions": [],
+                    "cap_applied": False, "cap_reason": None}
 
         total_weighted = 0.0
         total_weight = 0.0
         evidence_blocked = 0
+        evidence_blocked_questions: List[Dict] = []
 
         for resp, question in responses:
             if resp.numeric_score is None:
@@ -229,6 +235,7 @@ class ScoringEngineV2:
             # not yet verified) and REJECTED both fall back to the cap so
             # claims do not lift maturity without a verified audit trail.
             effective_score = float(resp.numeric_score)
+            claimed = effective_score
             if (
                 question.evidence_required
                 and effective_score >= self.EVIDENCE_REQUIRED_FOR_SCORE_AT_OR_ABOVE
@@ -236,6 +243,15 @@ class ScoringEngineV2:
             ):
                 evidence_blocked += 1
                 effective_score = min(effective_score, self.EVIDENCE_CAP_WITHOUT_ACCEPTED)
+                evidence_blocked_questions.append({
+                    "question_id": question.id,
+                    "code": question.question_code,
+                    "claimed": claimed,
+                    "capped_to": effective_score,
+                    "evidence_status": (
+                        resp.evidence_status.value if resp.evidence_status else None
+                    ),
+                })
 
             role_w = self.ROLE_WEIGHTS.get(
                 resp.respondent_role.value if resp.respondent_role else "TECHNICIAN", 0.20
@@ -258,6 +274,7 @@ class ScoringEngineV2:
             "final_score": round(raw, 2) if raw else None,  # caps applied later
             "response_count": len(responses),
             "evidence_blocked": evidence_blocked,
+            "evidence_blocked_questions": evidence_blocked_questions,
             "cap_applied": False,
             "cap_reason": None,
         }
@@ -309,6 +326,106 @@ class ScoringEngineV2:
                     "trigger_score": resp.numeric_score,
                 })
         return caps
+
+    # ═══════════════════════════════════════════
+    #  CMMS DATA EVIDENCE CAPS
+    # ═══════════════════════════════════════════
+
+    # Without a CMMS data snapshot, AI.1 (CMMS/EAM Effectiveness) and AI.2
+    # (Data Quality & Integrity) cannot be claimed above "Emerging". The site
+    # may *say* the CMMS is mature, but no auditable export = no evidence.
+    CMMS_REQUIRED_FOR_SUBDOMAINS = {
+        "AI.1": {
+            "needs": "work_orders",
+            "cap_without_snapshot": 2.0,
+            "label": "No CMMS work-order export — cannot verify CMMS effectiveness",
+        },
+        "AI.2": {
+            "needs": "work_orders",
+            "cap_without_snapshot": 2.5,
+            "label": "No CMMS data export — data quality unverified",
+        },
+        "WM.2": {
+            "needs": "pm",
+            "cap_without_snapshot": 3.0,
+            "label": "No PM compliance export — PM/PdM maturity unverified",
+        },
+    }
+
+    def _apply_cmms_evidence_caps(self, assessment_id: int,
+                                  sd_results: Dict[str, Dict]) -> List[Dict]:
+        """Cap subdomains that require a CMMS snapshot but didn't get one."""
+        uploads = (
+            self.db.query(CMMSUploadV2)
+            .filter(
+                CMMSUploadV2.assessment_id == assessment_id,
+                CMMSUploadV2.status == "processed",
+            )
+            .all()
+        )
+        kinds_present = {u.kind for u in uploads}
+
+        caps = []
+        for sd_code, rule in self.CMMS_REQUIRED_FOR_SUBDOMAINS.items():
+            sd_data = sd_results.get(sd_code)
+            if not sd_data or sd_data.get("final_score") is None:
+                continue
+
+            if rule["needs"] in kinds_present:
+                continue  # snapshot exists; let claim stand
+
+            cap = rule["cap_without_snapshot"]
+            if sd_data["final_score"] > cap:
+                sd_data["final_score"] = cap
+                sd_data["cap_applied"] = True
+                sd_data["cap_reason"] = rule["label"]
+                caps.append({
+                    "subdomain": sd_code,
+                    "cap": cap,
+                    "label": rule["label"],
+                    "source": "cmms_evidence_missing",
+                })
+
+        # When snapshots exist, soft-floor with the metric: poor data quality
+        # / reactive ratio caps the AI.* claim even if the auditor scored it
+        # high.
+        for upload in uploads:
+            metrics = upload.metrics or {}
+            if upload.kind == "work_orders":
+                # data_quality.score (1-5) caps AI.2 directly
+                dq = (metrics.get("data_quality") or {}).get("score")
+                if isinstance(dq, (int, float)):
+                    self._cap_subdomain(sd_results, "AI.2", float(dq) + 0.5,
+                                        f"CMMS data quality score = {dq:.1f}", caps,
+                                        source="cmms_data_quality")
+                # Reactive ratio inversely caps WM.1 (planning is poor if reactive is high)
+                rr = (metrics.get("reactive_ratio") or {}).get("reactive_ratio")
+                if isinstance(rr, (int, float)) and rr > 0.5:
+                    self._cap_subdomain(sd_results, "WM.1", 3.0,
+                                        f"Reactive ratio {rr:.0%} — planning maturity capped",
+                                        caps, source="cmms_reactive_ratio")
+            elif upload.kind == "pm":
+                pmc = metrics.get("pm_compliance_rate") or metrics.get("compliance_rate")
+                if isinstance(pmc, (int, float)):
+                    # 0.95 -> ~4.5; 0.5 -> ~2.5
+                    derived = 1.0 + min(max(pmc, 0.0), 1.0) * 4.0
+                    self._cap_subdomain(sd_results, "WM.2", derived + 0.3,
+                                        f"PM compliance {pmc:.0%}", caps,
+                                        source="cmms_pm_compliance")
+
+        return caps
+
+    @staticmethod
+    def _cap_subdomain(sd_results: Dict[str, Dict], sd_code: str, cap: float,
+                       label: str, caps: List[Dict], source: str) -> None:
+        sd = sd_results.get(sd_code)
+        if not sd or sd.get("final_score") is None:
+            return
+        if sd["final_score"] > cap:
+            sd["final_score"] = round(cap, 2)
+            sd["cap_applied"] = True
+            sd["cap_reason"] = label
+            caps.append({"subdomain": sd_code, "cap": round(cap, 2), "label": label, "source": source})
 
     def _apply_cross_domain_caps(self, domain_results: Dict[str, Dict]) -> List[Dict]:
         """Apply cross-domain cap rules."""

@@ -26,6 +26,7 @@ services:
     # Bind-mount backend/ so uvicorn --reload picks up every save
     volumes:
       - ./backend:/app
+      - ./docs/rmi-vnext:/docs/rmi-vnext:ro
       - db-data:/app/db         # SQLite lives here so it survives restarts
       - uploads:/app/uploads
       - reports:/app/reports
@@ -39,6 +40,8 @@ services:
       FRONTEND_URL: http://localhost:3000
       UPLOAD_DIR: /app/uploads
       REPORT_OUTPUT_DIR: /app/reports
+      INITIAL_ADMIN_EMAIL: ${INITIAL_ADMIN_EMAIL:-nextbelt@next-belt.com}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-admin123}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:-}

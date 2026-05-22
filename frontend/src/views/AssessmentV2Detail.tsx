@@ -6,9 +6,10 @@ import React, {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { QuestionV2 } from "../api/clientV2";
+import type { QuestionV2, ISOGapReport, ISOClauseResult, ISOSection } from "../api/clientV2";
+import { v2API } from "../api/clientV2";
 import { useV2Store } from "../api/storeV2";
-import { Button, Card } from "../components";
+import { Card, EvidenceWidget, CMMSUploadPanel, ErrorBoundary, DomainRadar } from "../components";
 import { theme } from "../styles/theme";
 
 const ROLE_OPTIONS = [
@@ -40,14 +41,16 @@ export const AssessmentV2Detail: React.FC = () => {
     scoringLoading,
     loadFramework,
     domains,
+    responseExtras,
   } = useV2Store();
 
   const [selectedRole, setSelectedRole] = useState("ALL");
   const [activeTab, setActiveTab] = useState<
-    "interview" | "scores" | "benchmark" | "practices"
+    "interview" | "scores" | "benchmark" | "practices" | "iso"
   >("interview");
   const [currentDomain, setCurrentDomain] = useState<string | null>(null);
   const [currentSubdomain, setCurrentSubdomain] = useState<string | null>(null);
+  const [evidenceFilter, setEvidenceFilter] = useState<"all" | "required" | "not_required">("all");
   const [responses, setResponses] = useState<
     Record<number, { score: number; notes: string }>
   >({});
@@ -56,6 +59,7 @@ export const AssessmentV2Detail: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<
     Record<number, "saving" | "saved" | "error">
   >({});
+  const [saveErrors, setSaveErrors] = useState<Record<number, string>>({});
   const [showGuide, setShowGuide] = useState(false);
   const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const responsesLoaded = useRef(false);
@@ -95,6 +99,11 @@ export const AssessmentV2Detail: React.FC = () => {
   const autoSave = useCallback(
     async (questionId: number, score: number, notes: string) => {
       setSaveStatus((prev) => ({ ...prev, [questionId]: "saving" }));
+      setSaveErrors((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
       try {
         await submitResponse(id, {
           question_id: questionId,
@@ -104,8 +113,6 @@ export const AssessmentV2Detail: React.FC = () => {
           evidence_notes: notes || undefined,
         });
         setSaveStatus((prev) => ({ ...prev, [questionId]: "saved" }));
-        // Note: submitResponse already calls loadProgress internally
-        // Clear 'saved' indicator after 2s
         setTimeout(() => {
           setSaveStatus((prev) => {
             const next = { ...prev };
@@ -113,8 +120,17 @@ export const AssessmentV2Detail: React.FC = () => {
             return next;
           });
         }, 2000);
-      } catch {
+      } catch (err: any) {
+        const detail =
+          err?.response?.data?.detail ||
+          err?.response?.statusText ||
+          err?.message ||
+          "Unknown error";
+        const msg = typeof detail === "string" ? detail : JSON.stringify(detail);
         setSaveStatus((prev) => ({ ...prev, [questionId]: "error" }));
+        setSaveErrors((prev) => ({ ...prev, [questionId]: msg }));
+        // eslint-disable-next-line no-console
+        console.error(`autoSave q=${questionId} failed:`, err);
       }
     },
     [id, selectedRole, submitResponse]
@@ -182,10 +198,29 @@ export const AssessmentV2Detail: React.FC = () => {
     setActiveTab("scores");
   };
 
-  const currentQuestions =
+  const currentQuestionsAll =
     currentDomain && currentSubdomain
       ? questionTree[currentDomain]?.[currentSubdomain] || []
       : [];
+  const currentQuestions = currentQuestionsAll.filter((q) => {
+    if (evidenceFilter === "required") return q.evidence_required === true;
+    if (evidenceFilter === "not_required") return q.evidence_required === false;
+    return true;
+  });
+
+  // Per-subdomain answered counts (any saved response with a numeric score counts)
+  const subdomainAnswered = useMemo(() => {
+    const counts: Record<string, number> = {};
+    Object.values(questionTree).forEach((subs) => {
+      Object.entries(subs).forEach(([sdCode, qs]) => {
+        counts[sdCode] = qs.reduce(
+          (n, q) => n + ((responses[q.id]?.score ?? 0) > 0 ? 1 : 0),
+          0
+        );
+      });
+    });
+    return counts;
+  }, [questionTree, responses]);
 
   const domainName = (code: string) =>
     domains.find((d) => d.code === code)?.name || code;
@@ -213,24 +248,27 @@ export const AssessmentV2Detail: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
+    <div className="page">
       {/* Assessment Header */}
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: 24 }}>
         <button
           onClick={() => navigate("/dashboard")}
           style={{
             background: "none",
             border: "none",
-            color: theme.colors.primary,
+            color: "var(--accent)",
             cursor: "pointer",
-            fontSize: "0.875rem",
+            fontSize: "0.8125rem",
             fontWeight: 500,
             padding: 0,
-            marginBottom: "12px",
-            fontFamily: theme.typography.fontFamily.primary,
+            marginBottom: 14,
+            fontFamily: "inherit",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          ← Back to Dashboard
+          ← Back to Assessments
         </button>
 
         <div
@@ -239,38 +277,42 @@ export const AssessmentV2Detail: React.FC = () => {
             justifyContent: "space-between",
             alignItems: "flex-start",
             flexWrap: "wrap",
-            gap: "16px",
+            gap: 16,
           }}
         >
           <div>
-            <h1
-              style={{
-                fontSize: "1.5rem",
-                margin: "0 0 4px 0",
-                color: "#1A1A1A",
-              }}
-            >
-              {currentAssessment.organization_name}
+            <div className="pg-crumb" style={{ marginBottom: 6 }}>
+              <span>Assessments</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              <span className="crumb-cur">{currentAssessment.site_name}</span>
+            </div>
+            <h1 className="pg-title" style={{ fontSize: 36, margin: "0 0 8px" }}>
+              <em>{currentAssessment.organization_name.split(" ")[0]}</em>
+              {currentAssessment.organization_name.includes(" ") &&
+                " " + currentAssessment.organization_name.split(" ").slice(1).join(" ")}
             </h1>
-            <p style={{ color: "#8A8A86", fontSize: "0.875rem", margin: 0 }}>
-              {currentAssessment.site_name} ·{" "}
-              {currentAssessment.assessment_mode.toUpperCase()} mode
-              {currentAssessment.industry_module &&
-                ` · ${currentAssessment.industry_module}`}
-            </p>
+            <div className="pg-sub">
+              <span>{currentAssessment.site_name}</span>
+              <span className="dot" />
+              <span className="mono" style={{ textTransform: "uppercase" }}>
+                {currentAssessment.assessment_mode}
+              </span>
+              {currentAssessment.industry_module && (
+                <>
+                  <span className="dot" />
+                  <span>{currentAssessment.industry_module}</span>
+                </>
+              )}
+            </div>
           </div>
           {currentAssessment.overall_rmi != null && (
-            <div style={{ textAlign: "right" }}>
-              <div
-                style={{
-                  fontSize: "2rem",
-                  fontWeight: 700,
-                  color: theme.colors.primary,
-                }}
-              >
+            <div className="card" style={{ padding: "14px 20px", textAlign: "right", minWidth: 160 }}>
+              <div className="label" style={{ marginBottom: 6 }}>Overall RMI</div>
+              <div className="num" style={{ fontSize: 36, color: "var(--accent)" }}>
                 {Number(currentAssessment.overall_rmi).toFixed(2)}
+                <span className="unit" style={{ fontSize: 14, color: "var(--muted)" }}> / 5.0</span>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "#666666" }}>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>
                 {currentAssessment.maturity_level}
               </div>
             </div>
@@ -282,13 +324,19 @@ export const AssessmentV2Detail: React.FC = () => {
       <div
         style={{
           display: "flex",
-          gap: "0",
-          borderBottom: "1px solid rgba(0,0,0,0.08)",
-          marginBottom: "24px",
+          gap: 4,
+          borderBottom: "1px solid var(--line)",
+          marginBottom: 24,
         }}
       >
-        {(["interview", "scores", "benchmark", "practices"] as const).map(
-          (tab) => (
+        {([
+          ["interview",  "Interview"],
+          ["scores",     "Scores"],
+          ["benchmark",  "Benchmark"],
+          ["practices",  "Practices"],
+          ["iso",        "ISO 55001"],
+        ] as const).map(
+          ([tab, label]) => (
             <button
               key={tab}
               onClick={() => {
@@ -296,24 +344,23 @@ export const AssessmentV2Detail: React.FC = () => {
                 if (tab === "scores" && !scoringResult) calculateScores(id);
               }}
               style={{
-                padding: "12px 20px",
+                padding: "10px 16px",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                fontSize: "0.875rem",
+                fontSize: 13.5,
                 fontWeight: 600,
-                textTransform: "capitalize",
-                color: activeTab === tab ? theme.colors.primary : "#666666",
+                color: activeTab === tab ? "var(--accent)" : "var(--ink-2)",
                 borderBottom:
                   activeTab === tab
-                    ? `2px solid ${theme.colors.primary}`
+                    ? "2px solid var(--accent)"
                     : "2px solid transparent",
-                marginBottom: "-2px",
-                fontFamily: theme.typography.fontFamily.primary,
-                transition: "all 0.2s ease",
+                marginBottom: -1,
+                fontFamily: "inherit",
+                transition: "all 0.15s ease",
               }}
             >
-              {tab}
+              {label}
             </button>
           )
         )}
@@ -322,15 +369,19 @@ export const AssessmentV2Detail: React.FC = () => {
       {/* Tab Content */}
       {activeTab === "interview" && (
         <div>
+          {/* CMMS data snapshot */}
+          <ErrorBoundary fallbackLabel="CMMS upload panel failed to render.">
+            <CMMSUploadPanel assessmentId={id} disabled={!!currentAssessment.finalized_at} />
+          </ErrorBoundary>
+
           {/* Assessor Guide Banner */}
-          <Card>
+          <Card style={{ marginBottom: 20 }}>
             <div
               style={{
                 padding: "16px 20px",
-                background: "#F0F7FF",
-                borderRadius: "8px",
-                borderLeft: "4px solid #2563EB",
-                marginBottom: "20px",
+                background: "var(--accent-soft)",
+                borderRadius: 10,
+                borderLeft: "3px solid var(--accent)",
               }}
             >
               <div
@@ -341,18 +392,23 @@ export const AssessmentV2Detail: React.FC = () => {
                 }}
               >
                 <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                  style={{ display: "flex", alignItems: "center", gap: 12 }}
                 >
-                  <span style={{ fontSize: "1.25rem" }}>📋</span>
+                  <div
+                    className="brand-mark"
+                    style={{ width: 28, height: 28, fontSize: 10 }}
+                  >
+                    NB
+                  </div>
                   <div>
-                    <strong style={{ fontSize: "0.875rem", color: "#1E40AF" }}>
+                    <strong style={{ fontSize: 13.5, color: "var(--accent)" }}>
                       NextBelt Assessment Guide
                     </strong>
                     <div
                       style={{
-                        fontSize: "0.75rem",
-                        color: "#475569",
-                        marginTop: "2px",
+                        fontSize: 11.5,
+                        color: "var(--ink-2)",
+                        marginTop: 3,
                       }}
                     >
                       Score each question 1-5 using the rubric. Select the
@@ -361,18 +417,8 @@ export const AssessmentV2Detail: React.FC = () => {
                   </div>
                 </div>
                 <button
+                  className="btn sm"
                   onClick={() => setShowGuide(!showGuide)}
-                  style={{
-                    background: "none",
-                    border: "1px solid #93C5FD",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    padding: "4px 12px",
-                    fontSize: "0.75rem",
-                    color: "#2563EB",
-                    fontWeight: 600,
-                    fontFamily: theme.typography.fontFamily.primary,
-                  }}
                 >
                   {showGuide ? "Hide Guide" : "Show Full Guide"}
                 </button>
@@ -380,30 +426,30 @@ export const AssessmentV2Detail: React.FC = () => {
               {showGuide && (
                 <div
                   style={{
-                    marginTop: "16px",
-                    paddingTop: "16px",
-                    borderTop: "1px solid #BFDBFE",
+                    marginTop: 14,
+                    paddingTop: 14,
+                    borderTop: "1px solid rgba(14, 110, 98, 0.20)",
                   }}
                 >
                   <div
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
-                      gap: "20px",
-                      fontSize: "0.8rem",
-                      color: "#334155",
-                      lineHeight: 1.7,
+                      gap: 20,
+                      fontSize: 12.5,
+                      color: "var(--ink-2)",
+                      lineHeight: 1.65,
                     }}
                   >
                     <div>
                       <h4
                         style={{
                           margin: "0 0 8px 0",
-                          color: "#1E40AF",
-                          fontSize: "0.85rem",
+                          color: "var(--accent)",
+                          fontSize: 12.5,
                         }}
                       >
-                        🎯 Scoring Scale (1-5)
+                        Scoring Scale (1-5)
                       </h4>
                       <table
                         style={{
@@ -413,7 +459,7 @@ export const AssessmentV2Detail: React.FC = () => {
                         }}
                       >
                         <tbody>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -428,7 +474,7 @@ export const AssessmentV2Detail: React.FC = () => {
                               ad-hoc only
                             </td>
                           </tr>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -443,7 +489,7 @@ export const AssessmentV2Detail: React.FC = () => {
                               but inconsistent
                             </td>
                           </tr>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -458,7 +504,7 @@ export const AssessmentV2Detail: React.FC = () => {
                               followed, measured
                             </td>
                           </tr>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -495,11 +541,11 @@ export const AssessmentV2Detail: React.FC = () => {
                       <h4
                         style={{
                           margin: "0 0 8px 0",
-                          color: "#1E40AF",
-                          fontSize: "0.85rem",
+                          color: "var(--accent)",
+                          fontSize: 12.5,
                         }}
                       >
-                        📝 Assessment Best Practices
+                        Assessment Best Practices
                       </h4>
                       <ul
                         style={{
@@ -537,78 +583,42 @@ export const AssessmentV2Detail: React.FC = () => {
                   </div>
                   <div
                     style={{
-                      marginTop: "16px",
-                      padding: "12px",
-                      background: "#DBEAFE",
-                      borderRadius: "6px",
+                      marginTop: 14,
+                      padding: 12,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--line-2)",
+                      borderRadius: 10,
                     }}
                   >
                     <h4
                       style={{
-                        margin: "0 0 6px 0",
-                        color: "#1E40AF",
-                        fontSize: "0.8rem",
+                        margin: "0 0 8px 0",
+                        color: "var(--ink)",
+                        fontSize: 12,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
                       }}
                     >
-                      🏗 Assessment Workflow
+                      Assessment Workflow
                     </h4>
                     <div
                       style={{
                         display: "flex",
-                        gap: "4px",
+                        gap: 6,
                         alignItems: "center",
-                        fontSize: "0.75rem",
-                        color: "#1E3A5F",
+                        fontSize: 11.5,
+                        color: "var(--ink-2)",
                         flexWrap: "wrap",
                       }}
                     >
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background:
-                            activeTab === "interview"
-                              ? theme.colors.primary
-                              : "#93C5FD",
-                          color: "#fff",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        1. Interview
-                      </span>
-                      <span>→</span>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background: "#93C5FD",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        2. Calculate Scores
-                      </span>
-                      <span>→</span>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background: "#93C5FD",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        3. Review Benchmark
-                      </span>
-                      <span>→</span>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background: "#93C5FD",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        4. Practices & Roadmap
-                      </span>
+                      {["Interview", "Calculate Scores", "Review Benchmark", "Practices & Roadmap"].map((step, i, arr) => (
+                        <React.Fragment key={step}>
+                          <span className={`chip ${i === 0 ? "accent" : "muted"}`}>
+                            {i + 1}. {step}
+                          </span>
+                          {i < arr.length - 1 && <span style={{ color: "var(--muted-2)" }}>→</span>}
+                        </React.Fragment>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -619,38 +629,19 @@ export const AssessmentV2Detail: React.FC = () => {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "240px 1fr",
-              gap: "24px",
+              gridTemplateColumns: "260px 1fr",
+              gap: 24,
             }}
           >
             {/* Domain/Subdomain Sidebar */}
-            <div>
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    color: "#666666",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Respondent Role
-                </label>
+            <div className="card" style={{ padding: 16, alignSelf: "start", position: "sticky", top: 80 }}>
+              <div className="field" style={{ marginBottom: 16 }}>
+                <label className="field-label">Respondent Role</label>
                 <select
+                  className="field-input"
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    borderRadius: "6px",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    fontSize: "0.8rem",
-                    marginTop: "4px",
-                    fontFamily: theme.typography.fontFamily.primary,
-                    background: "#FFFFFF",
-                    color: "#333333",
-                  }}
+                  style={{ fontSize: 12.5 }}
                 >
                   {ROLE_OPTIONS.map((r) => {
                     const totalAll = Object.values(roleCounts).reduce(
@@ -671,22 +662,25 @@ export const AssessmentV2Detail: React.FC = () => {
 
               {/* Progress Bar */}
               {progress && (
-                <div style={{ marginBottom: "20px" }}>
+                <div style={{ marginBottom: 20 }}>
                   <div
                     style={{
-                      fontSize: "0.75rem",
-                      color: "#666666",
-                      marginBottom: "6px",
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      marginBottom: 6,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      display: "flex",
+                      justifyContent: "space-between",
                     }}
                   >
-                    {progress.answered}/{progress.total_questions} answered (
-                    {progress.completion_pct}%)
+                    <span>{progress.answered}/{progress.total_questions}</span>
+                    <span>{progress.completion_pct}%</span>
                   </div>
                   <div
                     style={{
-                      height: "4px",
-                      background: "rgba(0,0,0,0.06)",
-                      borderRadius: "2px",
+                      height: 4,
+                      background: "var(--line-2)",
+                      borderRadius: 999,
                       overflow: "hidden",
                     }}
                   >
@@ -694,8 +688,8 @@ export const AssessmentV2Detail: React.FC = () => {
                       style={{
                         height: "100%",
                         width: `${progress.completion_pct}%`,
-                        background: theme.colors.primary,
-                        borderRadius: "2px",
+                        background: "var(--accent)",
+                        borderRadius: 999,
                         transition: "width 0.3s ease",
                       }}
                     />
@@ -705,8 +699,9 @@ export const AssessmentV2Detail: React.FC = () => {
 
               {/* Domain Tree */}
               <div
-                style={{ display: "flex", flexDirection: "column", gap: "2px" }}
+                style={{ display: "flex", flexDirection: "column", gap: 2 }}
               >
+                <div className="label" style={{ marginBottom: 6 }}>Domains</div>
                 {Object.keys(questionTree).map((domCode) => (
                   <div key={domCode}>
                     <button
@@ -722,26 +717,39 @@ export const AssessmentV2Detail: React.FC = () => {
                         border: "none",
                         background:
                           currentDomain === domCode
-                            ? `${theme.colors.primary}10`
+                            ? "var(--accent-soft)"
                             : "transparent",
-                        borderRadius: "6px",
+                        borderRadius: 8,
                         cursor: "pointer",
-                        fontSize: "0.825rem",
+                        fontSize: 12.5,
                         fontWeight: 600,
                         color:
                           currentDomain === domCode
-                            ? theme.colors.primary
-                            : "#333333",
-                        fontFamily: theme.typography.fontFamily.primary,
+                            ? "var(--accent)"
+                            : "var(--ink)",
+                        fontFamily: "inherit",
                       }}
                     >
-                      {domCode} · {domainName(domCode)}
+                      <span className="mono" style={{ fontSize: 10.5, color: "var(--muted)", marginRight: 6 }}>{domCode}</span>
+                      {domainName(domCode)}
+                      {(() => {
+                        const subs = questionTree[domCode] || {};
+                        const total = Object.values(subs).reduce((n, qs) => n + qs.length, 0);
+                        const answered = Object.keys(subs).reduce(
+                          (n, sd) => n + (subdomainAnswered[sd] ?? 0),
+                          0
+                        );
+                        return (
+                          <span style={{ float: "right", fontSize: 11, color: "var(--muted)", fontWeight: 500 }}>
+                            {answered}/{total}
+                          </span>
+                        );
+                      })()}
                     </button>
-                    {currentDomain === domCode &&
-                      Object.keys(questionTree[domCode]).map((sdCode) => (
+                    {Object.keys(questionTree[domCode]).map((sdCode) => (
                         <button
                           key={sdCode}
-                          onClick={() => setCurrentSubdomain(sdCode)}
+                          onClick={() => { setCurrentDomain(domCode); setCurrentSubdomain(sdCode); }}
                           style={{
                             width: "100%",
                             textAlign: "left",
@@ -749,19 +757,19 @@ export const AssessmentV2Detail: React.FC = () => {
                             border: "none",
                             background:
                               currentSubdomain === sdCode
-                                ? `${theme.colors.primary}18`
+                                ? "var(--accent-soft)"
                                 : "transparent",
-                            borderRadius: "4px",
+                            borderRadius: 6,
                             cursor: "pointer",
-                            fontSize: "0.775rem",
+                            fontSize: 11.5,
                             color:
                               currentSubdomain === sdCode
-                                ? theme.colors.primary
-                                : "#8A8A86",
-                            fontFamily: theme.typography.fontFamily.primary,
+                                ? "var(--accent)"
+                                : "var(--muted)",
+                            fontFamily: "'JetBrains Mono', monospace",
                           }}
                         >
-                          {sdCode} ({questionTree[domCode][sdCode].length})
+                          {sdCode} ({subdomainAnswered[sdCode] ?? 0}/{questionTree[domCode][sdCode].length})
                         </button>
                       ))}
                   </div>
@@ -771,49 +779,72 @@ export const AssessmentV2Detail: React.FC = () => {
               {/* Actions */}
               <div
                 style={{
-                  marginTop: "24px",
+                  marginTop: 20,
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--line-2)",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "8px",
+                  gap: 8,
                 }}
               >
                 <div
                   style={{
-                    fontSize: "0.7rem",
-                    color: "#666666",
+                    fontSize: 11,
+                    color: "var(--ok)",
                     textAlign: "center",
-                    padding: "6px 0",
+                    padding: 4,
                   }}
                 >
-                  ✓ Responses auto-save on selection
+                  ✓ Responses auto-save
                 </div>
-                <Button
+                <button
+                  className="btn primary block"
                   onClick={handleCalculateScores}
-                  style={{ width: "100%", fontSize: "0.8rem" }}
+                  disabled={scoringLoading}
                 >
                   {scoringLoading ? "Calculating..." : "Calculate Scores"}
-                </Button>
+                </button>
               </div>
             </div>
 
             {/* Questions Panel */}
             <div>
               {currentSubdomain && (
-                <div style={{ marginBottom: "16px" }}>
-                  <h2
-                    style={{
-                      fontSize: "1.125rem",
-                      margin: "0 0 4px 0",
-                      color: "#1A1A1A",
-                    }}
-                  >
-                    {subdomainName(currentSubdomain)}
-                  </h2>
-                  <p
-                    style={{ color: "#666666", fontSize: "0.8rem", margin: 0 }}
-                  >
-                    {currentSubdomain} · {currentQuestions.length} questions
-                  </p>
+                <div style={{ marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <h2
+                      style={{
+                        fontSize: "1.125rem",
+                        margin: "0 0 4px 0",
+                        color: "#1A1A1A",
+                      }}
+                    >
+                      {subdomainName(currentSubdomain)}
+                    </h2>
+                    <p
+                      style={{ color: "#666666", fontSize: "0.8rem", margin: 0 }}
+                    >
+                      {currentSubdomain} · {subdomainAnswered[currentSubdomain] ?? 0}/{currentQuestionsAll.length} answered
+                      {evidenceFilter !== "all" && (
+                        <> · showing {currentQuestions.length} of {currentQuestionsAll.length}</>
+                      )}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <label style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Evidence
+                    </label>
+                    <select
+                      className="field-input"
+                      value={evidenceFilter}
+                      onChange={(e) => setEvidenceFilter(e.target.value as "all" | "required" | "not_required")}
+                      style={{ fontSize: 12, padding: "6px 8px", width: "auto" }}
+                    >
+                      <option value="all">All questions</option>
+                      <option value="required">Evidence required</option>
+                      <option value="not_required">No evidence</option>
+                    </select>
+                  </div>
                 </div>
               )}
 
@@ -1031,11 +1062,26 @@ export const AssessmentV2Detail: React.FC = () => {
                           )}
                           {saveStatus[q.id] === "error" && (
                             <span style={{ color: "#C53030" }}>
-                              ✗ Error — click score to retry
+                              ✗ Save failed — click score to retry
                             </span>
                           )}
                         </span>
                       </div>
+                      {saveStatus[q.id] === "error" && saveErrors[q.id] && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: "0.72rem",
+                            color: "#C53030",
+                            background: "rgba(194, 83, 60, 0.08)",
+                            border: "1px solid rgba(194, 83, 60, 0.25)",
+                            borderRadius: 6,
+                            padding: "6px 8px",
+                          }}
+                        >
+                          {saveErrors[q.id]}
+                        </div>
+                      )}
 
                       {/* Notes — auto-saves after typing stops */}
                       {responses[q.id]?.score && (
@@ -1062,6 +1108,17 @@ export const AssessmentV2Detail: React.FC = () => {
                         />
                       )}
 
+                      {/* Evidence upload + AI analysis */}
+                      <ErrorBoundary fallbackLabel="Evidence widget error.">
+                        <EvidenceWidget
+                          assessmentId={id}
+                          questionId={q.id}
+                          evidenceFile={responseExtras[q.id]?.evidence_file ?? null}
+                          aiAnalysis={responseExtras[q.id]?.ai_analysis ?? null}
+                          onAcceptSuggestedScore={(score) => handleScoreSelect(q.id, score)}
+                        />
+                      </ErrorBoundary>
+
                       {/* Calibration Anchor */}
                       {q.calibration_anchor && (
                         <div
@@ -1084,21 +1141,689 @@ export const AssessmentV2Detail: React.FC = () => {
         </div>
       )}
 
-      {activeTab === "scores" && <ScoresTab assessmentId={id} />}
+      {activeTab === "scores" && (
+        <ErrorBoundary fallbackLabel="Could not render Scores.">
+          <ScoresTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
 
-      {activeTab === "benchmark" && <BenchmarkTab assessmentId={id} />}
+      {activeTab === "benchmark" && (
+        <ErrorBoundary fallbackLabel="Could not render Benchmark.">
+          <BenchmarkTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
 
-      {activeTab === "practices" && <PracticesTab assessmentId={id} />}
+      {activeTab === "practices" && (
+        <ErrorBoundary fallbackLabel="Could not render Practices.">
+          <PracticesTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
+
+      {activeTab === "iso" && (
+        <ErrorBoundary fallbackLabel="Could not render ISO 55001 gap report.">
+          <IsoGapsTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
     </div>
   );
 };
 
 // ═══════════════════════════════════════════
-//  Scores Tab
+//  Scores Tab — calibration-style maturity readout
 // ═══════════════════════════════════════════
+const MATURITY_LEVELS = [
+  { n: 1, label: "Reactive",     from: 1.0, to: 2.0 },
+  { n: 2, label: "Emerging",     from: 2.0, to: 3.0 },
+  { n: 3, label: "Systematic",   from: 3.0, to: 3.6 },
+  { n: 4, label: "Proactive",    from: 3.6, to: 4.3 },
+  { n: 5, label: "Prescriptive", from: 4.3, to: 5.01 },
+];
+
+const colorForScore = (s: number | null | undefined): string => {
+  if (s == null) return "var(--muted-2)";
+  if (s < 1.5) return "var(--danger)";
+  if (s < 2.5) return "var(--warn)";
+  if (s < 3.5) return "var(--accent)";
+  return "var(--ok)";
+};
+
+const levelForScore = (s: number | null | undefined) => {
+  if (s == null) return MATURITY_LEVELS[0];
+  return (
+    MATURITY_LEVELS.find((l) => s >= l.from && s < l.to) ||
+    MATURITY_LEVELS[MATURITY_LEVELS.length - 1]
+  );
+};
+
+const ScaleRuler: React.FC = () => (
+  <div className="ruler">
+    {MATURITY_LEVELS.map((l) => (
+      <div key={l.n} className="ruler-cell">
+        <span className="ruler-n mono">L{l.n}</span>
+        <span className="ruler-label">{l.label}</span>
+      </div>
+    ))}
+  </div>
+);
+
+const StatCard: React.FC<{
+  label: string;
+  value: string;
+  unit?: string;
+  tone?: string;
+  sub: React.ReactNode;
+  hint?: string;
+}> = ({ label, value, unit, tone, sub, hint }) => (
+  <div className="stat">
+    <div className="label">{label}</div>
+    <div className="stat-num-wrap">
+      <span className="num stat-num" style={{ color: tone || "var(--ink)" }}>{value}</span>
+      {unit && <span className="stat-unit">{unit}</span>}
+    </div>
+    <div className="stat-sub">{sub}</div>
+    {hint && <div className="stat-hint">{hint}</div>}
+  </div>
+);
+
+interface EvidenceBlockedQuestion {
+  question_id: number;
+  code: string;
+  claimed: number;
+  capped_to: number;
+  evidence_status: string | null;
+}
+
+const SubRow: React.FC<{
+  code: string;
+  name: string;
+  score: number | null;
+  capApplied: boolean;
+  evidenceBlocked?: number;
+  evidenceBlockedQuestions?: EvidenceBlockedQuestion[];
+}> = ({
+  code,
+  name,
+  score,
+  capApplied,
+  evidenceBlocked = 0,
+  evidenceBlockedQuestions = [],
+}) => {
+  const c = colorForScore(score);
+  const pct = ((score ?? 0) / 5) * 100;
+  const [showDetails, setShowDetails] = useState(false);
+  const hasEvidenceCap = evidenceBlocked > 0;
+  return (
+    <>
+      <div className="sub-row">
+        <span className="sub-code">{code}</span>
+        <span className="sub-name">{name}</span>
+        <div className="sub-track">
+          <div className="sub-track-ticks">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <div key={n} className="sub-tick" />
+            ))}
+          </div>
+          <div className="sub-fill" style={{ width: `${pct}%`, background: c }} />
+          <div className="sub-target" title="Target 3.0" />
+        </div>
+        <span className="sub-score" style={{ color: c }}>
+          {score != null ? score.toFixed(1) : "—"}
+        </span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {capApplied && (
+            <span className="chip-capped" title="Score capped by a weakest-link rule">
+              CAPPED
+            </span>
+          )}
+          {hasEvidenceCap && (
+            <button
+              type="button"
+              onClick={() => setShowDetails(!showDetails)}
+              title={`${evidenceBlocked} question${evidenceBlocked === 1 ? "" : "s"} capped — evidence missing or unverified`}
+              style={{
+                cursor: "pointer",
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 9.5,
+                fontWeight: 600,
+                letterSpacing: "0.06em",
+                padding: "3px 7px",
+                borderRadius: 4,
+                background: "rgba(192, 138, 46, 0.12)",
+                color: "var(--warn)",
+                border: "1px solid rgba(192, 138, 46, 0.35)",
+                textTransform: "uppercase",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              <svg
+                width="10"
+                height="10"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+              </svg>
+              {evidenceBlocked} no evid.
+              <span style={{ marginLeft: 2 }}>{showDetails ? "▴" : "▾"}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {showDetails && hasEvidenceCap && (
+        <div
+          style={{
+            background: "rgba(192, 138, 46, 0.06)",
+            borderTop: "1px solid var(--line-2)",
+            padding: "12px 24px 14px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--warn)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              fontWeight: 600,
+              marginBottom: 8,
+            }}
+          >
+            Capped questions in this subdomain
+          </div>
+          <div style={{ fontSize: 12.5, color: "var(--ink-2)", lineHeight: 1.5, marginBottom: 10 }}>
+            These were scored ≥ 4 (Proactive/Prescriptive) on questions that
+            require auditable evidence. Each is capped at 3.0 until accepted
+            evidence is on file.
+          </div>
+          {evidenceBlockedQuestions.map((q) => (
+            <div
+              key={q.question_id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "100px 1fr auto auto",
+                gap: 14,
+                alignItems: "center",
+                padding: "6px 0",
+                fontSize: 12.5,
+                color: "var(--ink-2)",
+                borderTop: "1px dashed var(--line)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                  fontWeight: 600,
+                }}
+              >
+                {q.code}
+              </span>
+              <span style={{ color: "var(--muted)" }}>
+                Status: <span style={{ color: "var(--warn)", fontWeight: 600 }}>
+                  {q.evidence_status || "—"}
+                </span>
+              </span>
+              <span style={{ color: "var(--muted)" }}>
+                claimed{" "}
+                <span style={{ color: "var(--ink-2)", fontWeight: 600 }}>
+                  {q.claimed.toFixed(1)}
+                </span>
+              </span>
+              <span style={{ color: "var(--muted)" }}>
+                capped to{" "}
+                <span style={{ color: "var(--warn)", fontWeight: 600 }}>
+                  {q.capped_to.toFixed(1)}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+};
+
+const DomainCard: React.FC<{
+  code: string;
+  name: string;
+  score: number | null;
+  subdomains: Array<{
+    code: string;
+    name: string;
+    score: number | null;
+    capApplied: boolean;
+    evidenceBlocked: number;
+    evidenceBlockedQuestions: EvidenceBlockedQuestion[];
+  }>;
+}> = ({ code, name, score, subdomains }) => {
+  const c = colorForScore(score);
+  const lvl = levelForScore(score);
+  const anyCapped = subdomains.some((s) => s.capApplied);
+  return (
+    <div className="domain-card">
+      <div className="domain-card-head">
+        <div className="domain-card-id">
+          <span
+            className="domain-code"
+            style={{ color: c, background: `${c}22`, borderColor: `${c}44` }}
+          >
+            {code}
+          </span>
+          <div>
+            <h3 className="domain-name">{name}</h3>
+            <div className="domain-meta">
+              <span>L{lvl.n} · {lvl.label}</span>
+              <span className="dot" />
+              <span>{subdomains.length} subdomains</span>
+              {anyCapped && (
+                <>
+                  <span className="dot" />
+                  <span className="chip-capped">Capped</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="domain-score-wrap">
+          <span className="num domain-score-num" style={{ color: c }}>
+            {score != null ? score.toFixed(2) : "—"}
+          </span>
+          <span className="domain-score-of">/ 5.00</span>
+        </div>
+      </div>
+      <div className="domain-card-body">
+        {subdomains.map((s) => (
+          <SubRow key={s.code} {...s} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// ── Blind spots: role disagreement detail card ─────────────────────────────
+interface BlindSpot {
+  subdomain: string;
+  variance: number;
+  severity: "warning" | "critical";
+  role_averages: Record<string, number>;
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  TECHNICIAN: "Technician",
+  SUPERVISOR: "Supervisor",
+  PLANNER: "Planner",
+  MANAGER: "Manager",
+  RELIABILITY_ENGINEER: "Reliability Eng.",
+  UNKNOWN: "Unknown role",
+};
+
+const BlindSpotCard: React.FC<{
+  spot: BlindSpot;
+  subdomainName: (code: string) => string;
+}> = ({ spot, subdomainName }) => {
+  const isCritical = spot.severity === "critical";
+  const tone = isCritical ? "var(--danger)" : "var(--warn)";
+  const bg = isCritical ? "rgba(194, 83, 60, 0.10)" : "rgba(192, 138, 46, 0.10)";
+
+  // Sort roles low → high so the "outliers" sit at the ends
+  const entries = Object.entries(spot.role_averages || {}).sort((a, b) => a[1] - b[1]);
+  const lowest = entries[0];
+  const highest = entries[entries.length - 1];
+
+  return (
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--line)",
+        borderRadius: "var(--radius)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px 22px",
+          borderBottom: "1px solid var(--line-2)",
+          gap: 14,
+          flexWrap: "wrap",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span
+            className="chip"
+            style={{ background: bg, color: tone, textTransform: "uppercase", letterSpacing: "0.04em" }}
+          >
+            <span className="dot" />
+            {spot.severity}
+          </span>
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 12.5,
+              fontWeight: 600,
+              padding: "4px 8px",
+              borderRadius: 6,
+              border: `1px solid ${tone}44`,
+              background: `${tone}18`,
+              color: tone,
+              letterSpacing: "0.04em",
+            }}
+          >
+            {spot.subdomain}
+          </span>
+          <span
+            style={{
+              fontFamily: "'Instrument Serif', serif",
+              fontSize: 20,
+              color: "var(--ink)",
+              lineHeight: 1,
+            }}
+          >
+            {subdomainName(spot.subdomain)}
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 10.5,
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.1em",
+              fontWeight: 600,
+            }}
+          >
+            Variance
+          </span>
+          <span
+            style={{
+              fontFamily: "'Instrument Serif', serif",
+              fontSize: 28,
+              color: tone,
+              lineHeight: 1,
+            }}
+          >
+            {spot.variance.toFixed(1)}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ padding: "16px 22px" }}>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--muted)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            fontWeight: 600,
+            marginBottom: 10,
+          }}
+        >
+          Role averages on this subdomain
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {entries.map(([role, score]) => {
+            const pct = (score / 5) * 100;
+            const isLow = lowest && role === lowest[0];
+            const isHigh = highest && role === highest[0] && lowest !== highest;
+            const c = colorForScore(score);
+            return (
+              <div
+                key={role}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "150px 1fr 48px",
+                  gap: 14,
+                  alignItems: "center",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: 12.5,
+                    color: "var(--ink-2)",
+                    fontWeight: isLow || isHigh ? 600 : 500,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {ROLE_LABELS[role] || role}
+                  {isLow && (
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        padding: "1px 5px",
+                        borderRadius: 3,
+                        background: "rgba(194, 83, 60, 0.10)",
+                        color: "var(--danger)",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      LOW
+                    </span>
+                  )}
+                  {isHigh && (
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontFamily: "'JetBrains Mono', monospace",
+                        padding: "1px 5px",
+                        borderRadius: 3,
+                        background: "rgba(47,138,107,0.10)",
+                        color: "var(--ok)",
+                        letterSpacing: "0.04em",
+                      }}
+                    >
+                      HIGH
+                    </span>
+                  )}
+                </span>
+                <div
+                  style={{
+                    position: "relative",
+                    height: 10,
+                    background: "var(--surface-2)",
+                    borderRadius: 5,
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      display: "grid",
+                      gridTemplateColumns: "repeat(5, 1fr)",
+                      pointerEvents: "none",
+                    }}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <div
+                        key={n}
+                        style={{
+                          borderRight: n < 5 ? "1px solid var(--line)" : "none",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      bottom: 0,
+                      width: `${pct}%`,
+                      background: c,
+                      borderRadius: "5px 0 0 5px",
+                      transition: "width 0.4s ease-out",
+                    }}
+                  />
+                </div>
+                <span
+                  style={{
+                    fontFamily: "'Instrument Serif', serif",
+                    fontSize: 18,
+                    color: c,
+                    textAlign: "right",
+                    lineHeight: 1,
+                  }}
+                >
+                  {score.toFixed(1)}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {lowest && highest && lowest !== highest && (
+          <div
+            style={{
+              marginTop: 14,
+              padding: "10px 12px",
+              borderRadius: 8,
+              background: bg,
+              borderLeft: `3px solid ${tone}`,
+              fontSize: 12.5,
+              color: "var(--ink-2)",
+              lineHeight: 1.5,
+            }}
+          >
+            <strong>{ROLE_LABELS[highest[0]] || highest[0]}s</strong> rate this
+            subdomain <strong>{(highest[1] - lowest[1]).toFixed(1)}</strong> higher
+            than <strong>{ROLE_LABELS[lowest[0]] || lowest[0]}s</strong> on average.
+            {isCritical
+              ? " That's a serious disconnect — interview both groups before trusting the headline score."
+              : " Worth a follow-up to reconcile what each role is actually observing on the floor."}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const BlindSpotsSection: React.FC<{
+  blindSpots: any[];
+  subdomainName: (code: string) => string;
+}> = ({ blindSpots, subdomainName }) => {
+  const valid: BlindSpot[] = blindSpots
+    .filter(
+      (b) =>
+        b &&
+        typeof b === "object" &&
+        b.subdomain &&
+        typeof b.variance === "number" &&
+        b.role_averages,
+    )
+    .sort((a, b) => b.variance - a.variance);
+
+  if (valid.length === 0) return null;
+
+  const critical = valid.filter((b) => b.severity === "critical").length;
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <div className="domain-section-head" style={{ margin: "0 0 14px" }}>
+        <h2 className="section-title" style={{ color: "var(--warn)" }}>
+          Blind spots detected
+        </h2>
+        <div className="row" style={{ gap: 10, flexWrap: "wrap" }}>
+          <span className="chip muted">
+            {valid.length} subdomain{valid.length === 1 ? "" : "s"}
+          </span>
+          {critical > 0 && (
+            <span
+              className="chip"
+              style={{ background: "rgba(194, 83, 60, 0.10)", color: "var(--danger)" }}
+            >
+              <span className="dot" />
+              {critical} critical
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div
+        className="card"
+        style={{
+          padding: "18px 22px",
+          marginBottom: 18,
+          display: "flex",
+          gap: 14,
+          alignItems: "flex-start",
+        }}
+      >
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: "rgba(192, 138, 46, 0.12)",
+            color: "var(--warn)",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+            <line x1="12" y1="9" x2="12" y2="13" />
+            <line x1="12" y1="17" x2="12.01" y2="17" />
+          </svg>
+        </div>
+        <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, maxWidth: 820 }}>
+          A <strong>blind spot</strong> is a subdomain where different respondent
+          roles disagree by 1.5+ points on the 1–5 scale. It usually means one
+          group sees a problem the other doesn't — e.g. technicians know PMs
+          aren't actually being followed while managers report the policy as in
+          place. The headline score averages this out, so the disconnect is
+          hidden in the rollup. Reconcile these before signing off.
+        </div>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {valid.map((spot, i) => (
+          <BlindSpotCard
+            key={`${spot.subdomain}-${i}`}
+            spot={spot}
+            subdomainName={subdomainName}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+type RadarView = "domains" | "pillars";
+
+const PILLAR_GROUPS: Array<{ code: string; name: string; domains: string[] }> = [
+  { code: "PEOPLE",     name: "People",     domains: ["WC", "LC"] },
+  { code: "PROCESS",    name: "Process",    domains: ["WM", "SG"] },
+  { code: "TECHNOLOGY", name: "Technology", domains: ["AI"] },
+];
+
 const ScoresTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
-  const { scoringResult, scoringLoading, calculateScores, domains } =
+  const { scoringResult, scoringLoading, calculateScores, domains, progress } =
     useV2Store();
+  const [radarView, setRadarView] = useState<RadarView>("domains");
 
   const domainName = (code: string) =>
     domains.find((d) => d.code === code)?.name || code;
@@ -1122,312 +1847,401 @@ const ScoresTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
     );
   if (!scoringResult)
     return (
-      <div style={{ textAlign: "center", padding: "40px", color: "#666666" }}>
+      <div style={{ textAlign: "center", padding: "40px", color: "var(--muted)" }}>
         No scores available. Complete some questions first.
       </div>
     );
 
   const {
     overall_rmi,
-    maturity_level,
     confidence,
     confidence_score,
     blind_spots,
     iso_55001_readiness,
   } = scoringResult;
   const confidenceVal = confidence_score ?? confidence ?? 0;
+  const overallTone = colorForScore(overall_rmi);
+  const overallLevel = levelForScore(overall_rmi);
+  const isoPct = Math.round(((iso_55001_readiness ?? 0) as number) * 100);
+  const blindCount = (blind_spots ?? []).length;
 
-  // Backend returns domains as a dict { "AM": { score, subdomains: { "AM.1": {...} } } }
-  // Convert to array for rendering
   const domainScores = Object.entries(scoringResult.domains || {}).map(
     ([code, data]: [string, any]) => ({
-      domain_code: code,
-      domain_name: domainName(code),
-      score: data.score,
+      code,
+      name: domainName(code),
+      score: data.score as number | null,
       subdomains: Object.entries(data.subdomains || {}).map(
         ([sdCode, sdData]: [string, any]) => ({
-          subdomain_code: sdCode,
-          subdomain_name: subdomainName(sdCode),
-          final_score: sdData.final_score,
-          cap_applied: sdData.cap_applied,
-        })
+          code: sdCode,
+          name: subdomainName(sdCode),
+          score: (sdData.final_score ?? null) as number | null,
+          capApplied: !!sdData.cap_applied,
+          evidenceBlocked: Number(sdData.evidence_blocked || 0),
+          evidenceBlockedQuestions: (sdData.evidence_blocked_questions ||
+            []) as EvidenceBlockedQuestion[],
+        }),
       ),
-    })
+    }),
   );
 
-  const getScoreColor = (score: number) => {
-    if (score >= 4.3) return "#0D8A5E";
-    if (score >= 3.6) return theme.colors.primary;
-    if (score >= 3.0) return "#B8860B";
-    if (score >= 2.0) return "#C0603F";
-    return "#C53030";
-  };
+  const totalEvidenceBlocked = domainScores.reduce(
+    (sum, d) => sum + d.subdomains.reduce((s, sd) => s + sd.evidenceBlocked, 0),
+    0,
+  );
+
+  const answered = progress?.answered ?? 0;
+  const total = progress?.total_questions ?? 0;
 
   return (
     <div>
-      {/* Overall Score */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr",
-          gap: "24px",
-          marginBottom: "32px",
-        }}
-      >
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Overall RMI
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: getScoreColor(overall_rmi ?? 0),
-              }}
-            >
-              {(overall_rmi ?? 0).toFixed(2)}
-            </div>
-            <div
-              style={{
-                fontSize: "0.825rem",
-                color: "#8A8A86",
-                marginTop: "4px",
-              }}
-            >
-              {maturity_level}
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Confidence
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: theme.colors.primary,
-              }}
-            >
-              {(confidenceVal * 100).toFixed(0)}%
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              ISO 55001 Ready
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: (iso_55001_readiness ?? 0) >= 70 ? "#0D8A5E" : "#C0603F",
-              }}
-            >
-              {(iso_55001_readiness ?? 0).toFixed(0)}%
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Blind Spots
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: (blind_spots ?? []).length > 0 ? "#C53030" : "#0D8A5E",
-              }}
-            >
-              {(blind_spots ?? []).length}
-            </div>
-          </div>
-        </Card>
+      {/* KPI strip */}
+      <div className="stat-strip">
+        <StatCard
+          label="Overall RMI"
+          value={(overall_rmi ?? 0).toFixed(2)}
+          unit="/ 5.0"
+          tone={overallTone}
+          sub={
+            <span>
+              <span
+                style={{
+                  display: "inline-block",
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background: overallTone,
+                  marginRight: 6,
+                  verticalAlign: "middle",
+                }}
+              />
+              Level {overallLevel.n} · {overallLevel.label}
+            </span>
+          }
+          hint={
+            total > 0
+              ? `${answered}/${total} questions answered`
+              : "Score recalculates on submission"
+          }
+        />
+        <StatCard
+          label="Confidence"
+          value={`${Math.round(confidenceVal * 100)}%`}
+          tone={confidenceVal >= 0.8 ? "var(--ok)" : confidenceVal >= 0.5 ? "var(--warn)" : "var(--danger)"}
+          sub={confidenceVal >= 0.8 ? "Evidence well supported" : "Coverage gaps reduce confidence"}
+          hint={confidenceVal >= 0.8 ? "No unresolved flags" : "Add evidence to lift confidence"}
+        />
+        <StatCard
+          label="ISO 55001 Ready"
+          value={`${isoPct}%`}
+          tone={isoPct < 50 ? "var(--danger)" : isoPct < 70 ? "var(--warn)" : "var(--ok)"}
+          sub={
+            isoPct < 50
+              ? "Below readiness floor"
+              : isoPct < 70
+              ? "Approaching readiness"
+              : "On track"
+          }
+          hint="Subdomains scoring ≥ 3.0 (Systematic)"
+        />
+        <StatCard
+          label="Blind Spots"
+          value={String(blindCount)}
+          tone={blindCount === 0 ? "var(--ok)" : "var(--warn)"}
+          sub={blindCount === 0 ? "None detected" : `${blindCount} subdomain${blindCount === 1 ? "" : "s"}`}
+          hint="Areas with cross-role disagreement"
+        />
       </div>
 
-      {/* Domain Breakdown */}
-      <h3
-        style={{ fontSize: "1.125rem", marginBottom: "16px", color: "#1A1A1A" }}
-      >
-        Domain Scores
-      </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {(domainScores || []).map((d) => (
-          <Card key={d.domain_code}>
-            <div style={{ padding: "20px" }}>
+      {/* Radar snapshot */}
+      {(() => {
+        // P/P/T rollup: average constituent domain scores (skip nulls)
+        const pillarScores = PILLAR_GROUPS.map((g) => {
+          const vals = domainScores
+            .filter((d) => g.domains.includes(d.code))
+            .map((d) => d.score)
+            .filter((s): s is number => s != null);
+          const avg =
+            vals.length > 0 ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+          return {
+            code: g.code,
+            name: g.name,
+            score: avg != null ? Number(avg.toFixed(2)) : null,
+            domains: g.domains,
+          };
+        });
+
+        const isPillars = radarView === "pillars";
+        const radarPoints = isPillars
+          ? pillarScores.map((p) => ({ code: p.name, name: p.name, score: p.score }))
+          : domainScores.map((d) => ({ code: d.code, name: d.name, score: d.score }));
+        const legendRows = isPillars ? pillarScores : domainScores;
+        const headline = isPillars
+          ? "People, Process & Technology rollup"
+          : "Where you stand across the five domains";
+        const sublabel = isPillars
+          ? "3-pillar executive view"
+          : "5-domain snapshot";
+        const description = isPillars ? (
+          <>
+            The 5 maturity domains roll up under the classic People / Process /
+            Technology trinity. Each pillar score is the mean of its
+            constituent domains. Use this for exec readouts; switch back to
+            5-domain for prescriptive analysis.
+          </>
+        ) : (
+          <>
+            Each axis is one domain on the 1–5 maturity scale. The dashed ring
+            is your target ({(3.0).toFixed(1)}); the filled shape is your current
+            score. Domains where the polygon falls short of the dashed ring are
+            the ones to lift next.
+          </>
+        );
+
+        return (
+          <section
+            className="card radar-snapshot"
+            style={{ padding: "28px 32px", marginBottom: 24 }}
+          >
+            <div>
+              <DomainRadar
+                domains={radarPoints}
+                overall={overall_rmi ?? null}
+                target={3.0}
+                size={360}
+              />
+            </div>
+            <div>
               <div
                 style={{
                   display: "flex",
-                  justifyContent: "space-between",
                   alignItems: "center",
-                  marginBottom: "12px",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginBottom: 10,
                 }}
               >
-                <div>
-                  <span style={{ fontWeight: 600, color: "#333333" }}>
-                    {d.domain_code} · {d.domain_name}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: 700,
-                    color: getScoreColor(d.score ?? 0),
-                  }}
-                >
-                  {(d.score ?? 0).toFixed(2)}
+                <div className="label">{sublabel}</div>
+                <div className="seg" role="tablist" aria-label="Radar view">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={radarView === "domains"}
+                    className={radarView === "domains" ? "on" : ""}
+                    onClick={() => setRadarView("domains")}
+                  >
+                    5 Domains
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={radarView === "pillars"}
+                    className={radarView === "pillars" ? "on" : ""}
+                    onClick={() => setRadarView("pillars")}
+                  >
+                    P · P · T
+                  </button>
                 </div>
               </div>
-              {/* Subdomain bars */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+              <h3
+                style={{
+                  fontFamily: "'Instrument Serif', serif",
+                  fontWeight: 400,
+                  fontSize: 26,
+                  letterSpacing: "-0.01em",
+                  margin: "0 0 10px",
+                  color: "var(--ink)",
+                }}
               >
-                {(d.subdomains || []).map((sd) => (
-                  <div
-                    key={sd.subdomain_code}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                    }}
-                  >
+                {headline}
+              </h3>
+              <p
+                style={{
+                  fontSize: 13,
+                  color: "var(--muted)",
+                  lineHeight: 1.55,
+                  margin: "0 0 18px",
+                  maxWidth: 520,
+                }}
+              >
+                {description}
+              </p>
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isPillars ? "1fr" : "1fr 1fr",
+                  gap: "10px 24px",
+                }}
+              >
+                {legendRows.map((row) => {
+                  const c = colorForScore(row.score);
+                  const isPillar = isPillars;
+                  const tag = isPillar
+                    ? (row as typeof pillarScores[number]).domains.join(" + ")
+                    : row.code;
+                  return (
                     <div
+                      key={row.code}
                       style={{
-                        width: "220px",
-                        fontSize: "0.75rem",
-                        color: "#8A8A86",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        fontSize: 13,
                       }}
                     >
                       <span
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                      >
-                        {sd.subdomain_code}
-                      </span>
-                      <span style={{ marginLeft: "6px", color: "#666666" }}>
-                        {sd.subdomain_name}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "8px",
-                        background: "rgba(0,0,0,0.06)",
-                        borderRadius: "4px",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
                         style={{
-                          height: "100%",
-                          width: `${((sd.final_score ?? 0) / 5) * 100}%`,
-                          background: getScoreColor(sd.final_score ?? 0),
-                          borderRadius: "4px",
-                          transition: "width 0.5s ease",
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        width: "50px",
-                        textAlign: "right",
-                        fontSize: "0.825rem",
-                        fontWeight: 600,
-                        color: getScoreColor(sd.final_score ?? 0),
-                      }}
-                    >
-                      {(sd.final_score ?? 0).toFixed(1)}
-                    </div>
-                    {sd.cap_applied && (
-                      <span
-                        style={{
-                          fontSize: "0.65rem",
-                          padding: "1px 6px",
-                          borderRadius: "4px",
-                          background: "rgba(248,113,113,0.12)",
-                          color: "#F87171",
+                          fontFamily: "'JetBrains Mono', monospace",
+                          fontSize: 11,
                           fontWeight: 600,
+                          padding: "3px 8px",
+                          borderRadius: 6,
+                          border: `1px solid ${c}44`,
+                          background: `${c}18`,
+                          color: c,
+                          letterSpacing: "0.04em",
+                          whiteSpace: "nowrap",
                         }}
                       >
-                        CAPPED
+                        {isPillar ? row.name.toUpperCase() : row.code}
                       </span>
-                    )}
-                  </div>
-                ))}
+                      <span
+                        style={{
+                          color: "var(--ink-2)",
+                          flex: 1,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {isPillar ? (
+                          <span style={{ color: "var(--muted)", fontSize: 12 }}>
+                            {tag}
+                          </span>
+                        ) : (
+                          row.name
+                        )}
+                      </span>
+                      <span
+                        style={{
+                          fontFamily: "'Instrument Serif', serif",
+                          fontSize: 18,
+                          color: c,
+                          lineHeight: 1,
+                        }}
+                      >
+                        {row.score != null ? row.score.toFixed(2) : "—"}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </Card>
+          </section>
+        );
+      })()}
+
+      {/* Section head + scale ruler */}
+      <div className="domain-section-head">
+        <h2 className="section-title">Domain scores</h2>
+        <div className="row" style={{ gap: 14, flexWrap: "wrap" }}>
+          <span className="chip muted">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <circle cx="12" cy="12" r="6" />
+              <circle cx="12" cy="12" r="2" />
+            </svg>
+            Target 3.0
+          </span>
+          <ScaleRuler />
+        </div>
+      </div>
+
+      {totalEvidenceBlocked > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 14,
+            padding: "14px 18px",
+            marginBottom: 14,
+            borderRadius: "var(--radius)",
+            background: "rgba(192, 138, 46, 0.10)",
+            border: "1px solid rgba(192, 138, 46, 0.30)",
+          }}
+        >
+          <div
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              background: "rgba(192, 138, 46, 0.18)",
+              color: "var(--warn)",
+              display: "grid",
+              placeItems: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+          </div>
+          <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>
+            <strong>{totalEvidenceBlocked}</strong> question{totalEvidenceBlocked === 1 ? "" : "s"} scored
+            ≥ 4 (Proactive/Prescriptive) on items that require auditable
+            evidence — each is capped at 3.0 until accepted evidence is on file.
+            Look for the <span style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 11,
+              padding: "2px 6px",
+              borderRadius: 4,
+              background: "rgba(192, 138, 46, 0.18)",
+              color: "var(--warn)",
+              fontWeight: 600,
+            }}>NO EVID.</span> chip on a subdomain row, click it to see which
+            questions need evidence to lift the score.
+          </div>
+        </div>
+      )}
+
+      <div className="domain-stack">
+        {domainScores.map((d) => (
+          <DomainCard
+            key={d.code}
+            code={d.code}
+            name={d.name}
+            score={d.score}
+            subdomains={d.subdomains}
+          />
         ))}
       </div>
 
-      {/* Blind Spots */}
-      {blind_spots.length > 0 && (
-        <div style={{ marginTop: "24px" }}>
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              marginBottom: "12px",
-              color: "#C53030",
-            }}
-          >
-            ⚠️ Blind Spots Detected
-          </h3>
-          <Card>
-            <div style={{ padding: "16px" }}>
-              {blind_spots.map((b, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: "8px 0",
-                    fontSize: "0.875rem",
-                    color: "#333333",
-                    borderBottom:
-                      i < blind_spots.length - 1
-                        ? "1px solid rgba(0,0,0,0.06)"
-                        : "none",
-                  }}
-                >
-                  {b}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+      {/* Blind spots */}
+      {blindCount > 0 && (
+        <BlindSpotsSection
+          blindSpots={blind_spots ?? []}
+          subdomainName={subdomainName}
+        />
       )}
     </div>
   );
@@ -2590,6 +3404,430 @@ const PracticesTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
             </Card>
           );
         })}
+      </div>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════
+//  ISO 55001 Gap Report Tab
+// ═══════════════════════════════════════════
+const ISO_STATUS_META: Record<
+  ISOClauseResult["status"],
+  { label: string; tone: string; bg: string }
+> = {
+  exceeds:    { label: "Exceeds",    tone: "var(--ok)",      bg: "rgba(47,138,107,0.10)" },
+  ready:      { label: "Ready",      tone: "var(--ok)",      bg: "rgba(47,138,107,0.10)" },
+  gap:        { label: "Gap",        tone: "var(--warn)",    bg: "rgba(192,138,46,0.10)" },
+  major_gap:  { label: "Major gap",  tone: "var(--danger)",  bg: "rgba(194,83,60,0.10)" },
+  unanswered: { label: "Unanswered", tone: "var(--muted)",   bg: "var(--surface-2)" },
+  unmapped:   { label: "Unmapped",   tone: "var(--muted-2)", bg: "var(--surface-2)" },
+};
+
+const ClauseRow: React.FC<{ clause: ISOClauseResult; floor: number }> = ({
+  clause,
+  floor,
+}) => {
+  const [open, setOpen] = useState(false);
+  const meta = ISO_STATUS_META[clause.status];
+  const score = clause.score;
+  const pct = ((score ?? 0) / 5) * 100;
+  const targetPct = (floor / 5) * 100;
+  const hasDetails = clause.low_questions.length > 0;
+  return (
+    <div style={{ borderTop: "1px solid var(--line-2)" }}>
+      <div
+        onClick={() => hasDetails && setOpen(!open)}
+        style={{
+          display: "grid",
+          gridTemplateColumns: "70px minmax(240px, 1fr) 1fr 80px 100px 20px",
+          gap: 14,
+          alignItems: "center",
+          padding: "14px 24px",
+          cursor: hasDetails ? "pointer" : "default",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'JetBrains Mono', monospace",
+            fontSize: 12,
+            color: "var(--muted)",
+            fontWeight: 600,
+          }}
+        >
+          {clause.clause}
+        </span>
+        <span style={{ fontSize: 13.5, color: "var(--ink)", fontWeight: 500 }}>
+          {clause.name}
+        </span>
+        <div
+          style={{
+            position: "relative",
+            height: 10,
+            background: "var(--surface-2)",
+            borderRadius: 5,
+            overflow: "visible",
+          }}
+        >
+          {clause.status !== "unanswered" && clause.status !== "unmapped" && (
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                bottom: 0,
+                width: `${pct}%`,
+                background: meta.tone,
+                borderRadius: 5,
+                transition: "width 0.4s ease-out",
+              }}
+            />
+          )}
+          {/* Target line at the floor */}
+          <div
+            style={{
+              position: "absolute",
+              left: `${targetPct}%`,
+              top: -3,
+              bottom: -3,
+              width: 2,
+              background: "var(--ink)",
+              opacity: 0.55,
+              borderRadius: 1,
+            }}
+            title={`Target ${floor.toFixed(1)}`}
+          />
+        </div>
+        <span
+          className="chip"
+          style={{ background: meta.bg, color: meta.tone, whiteSpace: "nowrap" }}
+        >
+          <span className="dot" />
+          {meta.label}
+        </span>
+        <span
+          style={{
+            fontFamily: "'Instrument Serif', serif",
+            fontSize: 22,
+            color: meta.tone,
+            textAlign: "right",
+          }}
+        >
+          {score != null ? score.toFixed(1) : "—"}
+        </span>
+        <span
+          style={{
+            color: "var(--muted)",
+            fontSize: 12,
+            display: "inline-flex",
+            justifyContent: "flex-end",
+            opacity: hasDetails ? 1 : 0,
+            transform: open ? "rotate(90deg)" : "none",
+            transition: "transform 0.15s ease",
+          }}
+        >
+          ›
+        </span>
+      </div>
+
+      {open && hasDetails && (
+        <div
+          style={{
+            padding: "0 24px 16px 94px",
+            background: "var(--surface-2)",
+            borderTop: "1px solid var(--line-2)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.08em",
+              fontWeight: 600,
+              padding: "10px 0 6px",
+            }}
+          >
+            Pulling this clause down ({clause.questions_answered}/{clause.questions_total} questions answered)
+          </div>
+          {clause.low_questions.map((q) => (
+            <div
+              key={q.id}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "80px 1fr 50px",
+                gap: 12,
+                alignItems: "center",
+                padding: "8px 0",
+                fontSize: 12.5,
+                color: "var(--ink-2)",
+                borderTop: "1px dashed var(--line)",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  color: "var(--muted)",
+                }}
+              >
+                {q.code}
+              </span>
+              <span>{q.text}</span>
+              <span
+                style={{
+                  fontFamily: "'Instrument Serif', serif",
+                  fontSize: 18,
+                  color: q.score < 2 ? "var(--danger)" : "var(--warn)",
+                  textAlign: "right",
+                }}
+              >
+                {q.score.toFixed(1)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const SectionCard: React.FC<{ section: ISOSection; floor: number }> = ({
+  section,
+  floor,
+}) => {
+  return (
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--line)",
+        borderRadius: "var(--radius)",
+        overflow: "hidden",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px 24px",
+          borderBottom: "1px solid var(--line-2)",
+          gap: 12,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span
+            style={{
+              fontFamily: "'JetBrains Mono', monospace",
+              fontSize: 14,
+              fontWeight: 600,
+              padding: "6px 12px",
+              borderRadius: 8,
+              background: "var(--accent-soft)",
+              color: "var(--accent)",
+              letterSpacing: "0.04em",
+            }}
+          >
+            §{section.section}
+          </span>
+          <h3
+            style={{
+              fontFamily: "'Instrument Serif', serif",
+              fontWeight: 400,
+              fontSize: 22,
+              letterSpacing: "-0.005em",
+              margin: 0,
+              color: "var(--ink)",
+            }}
+          >
+            {section.title}
+          </h3>
+        </div>
+        <div style={{ fontSize: 12, color: "var(--muted)" }}>
+          <span style={{ color: "var(--ok)", fontWeight: 600 }}>
+            {section.ready}
+          </span>
+          <span> / {section.total} clauses ready</span>
+        </div>
+      </div>
+      <div>
+        {section.clauses.map((c) => (
+          <ClauseRow key={c.clause} clause={c} floor={floor} />
+        ))}
+      </div>
+    </div>
+  );
+};
+
+const IsoGapsTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
+  const [report, setReport] = useState<ISOGapReport | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    v2API
+      .getISOGapReport(assessmentId)
+      .then((r) => {
+        if (alive) setReport(r);
+      })
+      .catch((e: any) => {
+        if (alive)
+          setError(e?.response?.data?.detail || e?.message || "Could not load gap report");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [assessmentId]);
+
+  if (loading)
+    return (
+      <div style={{ textAlign: "center", padding: 40 }}>
+        <div className="spinner" />
+      </div>
+    );
+
+  if (error)
+    return (
+      <div
+        className="card"
+        style={{
+          padding: 24,
+          color: "var(--danger)",
+          fontSize: 13,
+        }}
+      >
+        {error}
+      </div>
+    );
+
+  if (!report) return null;
+
+  const s = report.summary;
+
+  return (
+    <div>
+      {/* Summary strip */}
+      <div className="stat-strip">
+        <div className="stat">
+          <div className="label">Overall Readiness</div>
+          <div className="stat-num-wrap">
+            <span
+              className="num stat-num"
+              style={{
+                color:
+                  s.overall_readiness_pct < 50
+                    ? "var(--danger)"
+                    : s.overall_readiness_pct < 70
+                    ? "var(--warn)"
+                    : "var(--ok)",
+              }}
+            >
+              {s.overall_readiness_pct.toFixed(0)}
+            </span>
+            <span className="stat-unit">%</span>
+          </div>
+          <div className="stat-sub">
+            {s.clauses_ready} of {s.total_clauses_mapped} clauses ready
+          </div>
+          <div className="stat-hint">
+            Clauses scoring ≥ {report.floor.toFixed(1)} (Systematic)
+          </div>
+        </div>
+        <div className="stat">
+          <div className="label">Ready</div>
+          <div className="stat-num-wrap">
+            <span className="num stat-num" style={{ color: "var(--ok)" }}>
+              {s.clauses_ready}
+            </span>
+          </div>
+          <div className="stat-sub">Audit-defensible</div>
+          <div className="stat-hint">Maintain & document evidence</div>
+        </div>
+        <div className="stat">
+          <div className="label">Gaps</div>
+          <div className="stat-num-wrap">
+            <span className="num stat-num" style={{ color: "var(--warn)" }}>
+              {s.clauses_with_gap}
+            </span>
+          </div>
+          <div className="stat-sub">Close to floor</div>
+          <div className="stat-hint">Score 2.0 – 3.0; targeted lift</div>
+        </div>
+        <div className="stat">
+          <div className="label">Major Gaps</div>
+          <div className="stat-num-wrap">
+            <span className="num stat-num" style={{ color: "var(--danger)" }}>
+              {s.clauses_major_gap}
+            </span>
+          </div>
+          <div className="stat-sub">Material findings</div>
+          <div className="stat-hint">Score &lt; 2.0; remediation required</div>
+        </div>
+      </div>
+
+      <div
+        className="card"
+        style={{
+          padding: "18px 22px",
+          marginBottom: 24,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 14,
+          background: "var(--surface)",
+        }}
+      >
+        <div
+          style={{
+            width: 38,
+            height: 38,
+            borderRadius: 10,
+            background: "var(--accent-soft)",
+            color: "var(--accent)",
+            display: "grid",
+            placeItems: "center",
+            flexShrink: 0,
+          }}
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+        </div>
+        <div style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55, maxWidth: 800 }}>
+          <strong>ISO 55001:2014</strong> readiness is computed clause-by-clause from
+          the questions tagged to each clause. A clause is <em>Ready</em> when its
+          mean response score reaches the {report.floor.toFixed(1)} floor
+          (Systematic — documented, followed, measured). Click any clause row to
+          see the questions pulling it down.
+        </div>
+      </div>
+
+      <div className="domain-section-head" style={{ margin: "0 0 14px" }}>
+        <h2 className="section-title">Clauses by section</h2>
+        <span className="chip muted" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          Target {report.floor.toFixed(1)}
+        </span>
+      </div>
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {report.sections.map((sec) => (
+          <SectionCard key={sec.section} section={sec} floor={report.floor} />
+        ))}
       </div>
     </div>
   );

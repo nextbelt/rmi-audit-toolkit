@@ -1,159 +1,121 @@
-import React, { useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from './api/store';
+import { Sidebar } from './components';
 import {
   Login,
   UserManagement,
   DashboardV2,
   AssessmentV2Detail,
+  Home,
+  Reports,
+  Benchmarks,
+  AuditLog,
+  Settings,
 } from './views';
 import './styles/global.css';
 
-// Protected Route Wrapper
+// ── Protected route wrapper ────────────────────────────────────────────────
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated } = useAuthStore();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-  
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
 
-// Layout Component with Header
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, logout } = useAuthStore();
+// ── Slim breadcrumb top bar ────────────────────────────────────────────────
+type Crumb = { label: string; to?: string };
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: 'Drafts',
+  IN_PROGRESS: 'In Progress',
+  COMPLETED: 'Scored',
+  FINALIZED: 'Finalized',
+};
+
+function crumbsForPath(pathname: string, search: string): Crumb[] {
+  if (pathname === '/' || pathname === '/home') {
+    return [{ label: 'Home' }];
+  }
+  if (pathname.startsWith('/dashboard')) {
+    const status = new URLSearchParams(search).get('status') || '';
+    const sublabel = STATUS_LABELS[status.toUpperCase()];
+    return sublabel
+      ? [{ label: 'Assessments', to: '/dashboard' }, { label: sublabel }]
+      : [{ label: 'Assessments' }];
+  }
+  if (pathname.startsWith('/assessment/')) {
+    return [
+      { label: 'Assessments', to: '/dashboard' },
+      { label: 'Detail' },
+    ];
+  }
+  if (pathname.startsWith('/benchmarks')) return [{ label: 'Insights' }, { label: 'Benchmarks' }];
+  if (pathname.startsWith('/reports'))    return [{ label: 'Insights' }, { label: 'Reports' }];
+  if (pathname.startsWith('/users'))      return [{ label: 'Admin' }, { label: 'Users' }];
+  if (pathname.startsWith('/audit'))      return [{ label: 'Admin' }, { label: 'Audit log' }];
+  if (pathname.startsWith('/settings'))   return [{ label: 'Admin' }, { label: 'Settings' }];
+  return [{ label: 'Workspace' }];
+}
+
+const Chevron: React.FC = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const TopBar: React.FC = () => {
+  const location = useLocation();
+  const crumbs = crumbsForPath(location.pathname, location.search);
 
   return (
-    <div style={{ minHeight: '100vh', background: '#FAFAFA' }}>
-      {/* Header */}
-      <header style={{
-        background: 'rgba(255, 255, 255, 0.95)',
-        backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid #E5E5E5',
-        padding: '12px 0',
-        position: 'sticky',
-        top: 0,
-        zIndex: 1000,
-      }}>
-        <div style={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          padding: '0 24px',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <a href="/dashboard" style={{ textDecoration: 'none', color: 'inherit' }}>
-              <h1 style={{
-                fontSize: '1.125rem',
-                fontWeight: 600,
-                margin: 0,
-                color: '#1A1A1A',
-                letterSpacing: '-0.02em',
-              }}>
-                RMI Audit Toolkit
-              </h1>
-            </a>
-            <span style={{
-              fontSize: '0.7rem',
-              color: '#999999',
-              fontFamily: "'IBM Plex Mono', monospace",
-              letterSpacing: '0.04em',
-            }}>
-              by NextBelt LLC
-            </span>
-          </div>
+    <header className="topbar">
+      <div className="crumb">
+        {crumbs.map((c, i) => (
+          <React.Fragment key={i}>
+            {c.to ? <Link to={c.to}>{c.label}</Link> : (i === crumbs.length - 1 ? <b>{c.label}</b> : <span>{c.label}</span>)}
+            {i < crumbs.length - 1 && <Chevron />}
+          </React.Fragment>
+        ))}
+      </div>
+    </header>
+  );
+};
 
-          {user && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-              <nav style={{ display: 'flex', gap: '20px' }}>
-                <a 
-                  href="/dashboard" 
-                  style={{
-                    fontSize: '0.8125rem',
-                    fontWeight: 500,
-                    color: '#666666',
-                    textDecoration: 'none',
-                    transition: 'color 0.15s ease',
-                    letterSpacing: '0.02em',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.color = '#0F6F6F'}
-                  onMouseLeave={(e) => e.currentTarget.style.color = '#666666'}
-                >
-                  Assessments
-                </a>
-                {user.role === 'admin' && (
-                  <a 
-                    href="/users" 
-                    style={{
-                      fontSize: '0.8125rem',
-                      fontWeight: 500,
-                      color: '#666666',
-                      textDecoration: 'none',
-                      transition: 'color 0.15s ease',
-                      letterSpacing: '0.02em',
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = '#0F6F6F'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = '#666666'}
-                  >
-                    Users
-                  </a>
-                )}
-              </nav>
-              <div style={{
-                height: '24px',
-                width: '1px',
-                background: '#E5E5E5',
-              }} />
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.8125rem', fontWeight: 500, color: '#333333' }}>
-                  {user.full_name}
-                </div>
-                <div style={{ fontSize: '0.6875rem', color: '#999999', fontFamily: "'IBM Plex Mono', monospace" }}>
-                  {user.role}
-                </div>
-              </div>
-              <button
-                onClick={logout}
-                style={{
-                  padding: '6px 14px',
-                  background: '#F5F5F5',
-                  border: '1px solid #E5E5E5',
-                  borderRadius: '4px',
-                  color: '#666666',
-                  fontSize: '0.8125rem',
-                  fontWeight: 500,
-                  cursor: 'pointer',
-                  transition: 'all 0.15s ease',
-                  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = '#0F6F6F';
-                  e.currentTarget.style.color = '#0F6F6F';
-                  e.currentTarget.style.background = 'rgba(15, 111, 111, 0.04)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = '#E5E5E5';
-                  e.currentTarget.style.color = '#666666';
-                  e.currentTarget.style.background = '#F5F5F5';
-                }}
-              >
-                Sign Out
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+// ── Shell layout (sidebar + main column) ───────────────────────────────────
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('rmi.sidebar.collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
 
-      {/* Main Content */}
-      <main style={{ minHeight: 'calc(100vh - 73px)' }}>
-        {children}
-      </main>
+  useEffect(() => {
+    try {
+      localStorage.setItem('rmi.sidebar.collapsed', collapsed ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [collapsed]);
+
+  return (
+    <div className="app-shell" data-rail={collapsed ? 'collapsed' : 'expanded'}>
+      <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
+      <div className="main-col">
+        <TopBar />
+        <main style={{ flex: 1 }}>{children}</main>
+      </div>
     </div>
   );
 };
+
+// ── Wrap a page in the protected shell ─────────────────────────────────────
+const Page: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <ProtectedRoute>
+    <Layout>{children}</Layout>
+  </ProtectedRoute>
+);
 
 function App() {
   const { fetchCurrentUser, isAuthenticated } = useAuthStore();
@@ -172,48 +134,32 @@ function App() {
       }}
     >
       <Routes>
-        {/* Public Routes */}
+        {/* Public */}
         <Route path="/login" element={<Login />} />
 
-        {/* Protected Routes with Layout */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <DashboardV2 />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/assessment/:assessmentId"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <AssessmentV2Detail />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/users"
-          element={
-            <ProtectedRoute>
-              <Layout>
-                <UserManagement />
-              </Layout>
-            </ProtectedRoute>
-          }
-        />
+        {/* Workspace */}
+        <Route path="/home"      element={<Page><Home /></Page>} />
 
-        {/* Legacy v2 paths redirect to new paths */}
+        {/* Assessments */}
+        <Route path="/dashboard" element={<Page><DashboardV2 /></Page>} />
+        <Route path="/assessment/:assessmentId" element={<Page><AssessmentV2Detail /></Page>} />
+
+        {/* Insights */}
+        <Route path="/benchmarks" element={<Page><Benchmarks /></Page>} />
+        <Route path="/reports"    element={<Page><Reports /></Page>} />
+
+        {/* Admin */}
+        <Route path="/users"    element={<Page><UserManagement /></Page>} />
+        <Route path="/audit"    element={<Page><AuditLog /></Page>} />
+        <Route path="/settings" element={<Page><Settings /></Page>} />
+
+        {/* Legacy v2 redirects */}
         <Route path="/v2" element={<Navigate to="/dashboard" replace />} />
         <Route path="/v2/assessment/:assessmentId" element={<Navigate to="/assessment/:assessmentId" replace />} />
 
-        {/* Default Route */}
-        <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        {/* Default */}
+        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="*" element={<Navigate to="/home" replace />} />
       </Routes>
     </BrowserRouter>
   );
