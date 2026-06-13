@@ -2,3 +2,10 @@
 pytest>=7.4,<9
 pytest-asyncio>=0.23,<1
 anyio[trio]>=3.7,<4
+
+# Static analysis (compatible with the app's pins)
+bandit[toml]>=1.7,<2
+
+# NOTE: code-review-graph is intentionally NOT listed here. It pulls a newer
+# fastapi/pydantic that conflicts with this app's pins, so install it in
+# isolation with pipx instead — see docs/CODE_REVIEW_GRAPH.md.

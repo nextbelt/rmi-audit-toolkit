@@ -1,0 +1,13 @@
+# Paths code-review-graph should not parse into the knowledge graph.
+.venv/**
+**/__pycache__/**
+**/.pytest_cache/**
+node_modules/**
+frontend/dist/**
+backend/alembic/versions/**
+backend/reports/**
+backend/uploads/**
+**/*.db
+**/*.lock
+package-lock.json
+.code-review-graph/**
