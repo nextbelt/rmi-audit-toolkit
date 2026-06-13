@@ -1,23 +1,7 @@
-"""Per-assessment ownership / admin RBAC."""
-from datetime import date, datetime
+"""Per-assessment ownership / admin RBAC (v2-only)."""
+from datetime import date
 
 import pytest
-
-
-def _make_v1_assessment(db_session, creator_id: int):
-    from models import Assessment, AssessmentStatus
-
-    a = Assessment(
-        client_name="ACME Industrial",
-        site_name="Plant A",
-        assessment_date=datetime.utcnow(),
-        creator_id=creator_id,
-        status=AssessmentStatus.DRAFT,
-    )
-    db_session.add(a)
-    db_session.commit()
-    db_session.refresh(a)
-    return a
 
 
 def _make_v2_assessment(db_session, creator_id: int):
@@ -37,24 +21,24 @@ def _make_v2_assessment(db_session, creator_id: int):
     return a
 
 
-class TestV1Finalize:
+class TestFinalize:
     def test_creator_can_finalize(self, client, db_session, make_user, auth_headers):
         owner = make_user(role="auditor")
-        a = _make_v1_assessment(db_session, creator_id=owner[0].id)
+        a = _make_v2_assessment(db_session, creator_id=owner[0].id)
         r = client.post(f"/assessments/{a.id}/finalize", headers=auth_headers(owner))
         assert r.status_code == 200
 
     def test_stranger_cannot_finalize(self, client, db_session, make_user, auth_headers):
         owner = make_user(role="auditor")
         outsider = make_user(role="auditor")
-        a = _make_v1_assessment(db_session, creator_id=owner[0].id)
+        a = _make_v2_assessment(db_session, creator_id=owner[0].id)
         r = client.post(f"/assessments/{a.id}/finalize", headers=auth_headers(outsider))
         assert r.status_code == 403
 
     def test_admin_can_finalize_any(self, client, db_session, make_user, auth_headers):
         owner = make_user(role="auditor")
         admin = make_user(role="admin")
-        a = _make_v1_assessment(db_session, creator_id=owner[0].id)
+        a = _make_v2_assessment(db_session, creator_id=owner[0].id)
         r = client.post(f"/assessments/{a.id}/finalize", headers=auth_headers(admin))
         assert r.status_code == 200
 
