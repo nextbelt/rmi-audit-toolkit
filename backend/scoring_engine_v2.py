@@ -93,8 +93,13 @@ class ScoringEngineV2:
     #  PUBLIC API
     # ═══════════════════════════════════════════
 
-    def calculate(self, assessment_id: int) -> Dict:
-        """Full scoring pipeline for a vNext assessment."""
+    def calculate(self, assessment_id: int, persist: bool = True) -> Dict:
+        """Full scoring pipeline for a vNext assessment.
+
+        persist=False computes the full result (scores, caps, blind spots,
+        velocity, confidence band) WITHOUT writing to the DB — used by report
+        generation so producing a report never mutates official scores.
+        """
         assessment = self.db.query(AssessmentV2).filter(
             AssessmentV2.id == assessment_id
         ).first()
@@ -175,9 +180,10 @@ class ScoringEngineV2:
         # ── Step 9: ISO 55001 readiness ──
         iso_readiness = self._iso_readiness(subdomain_results)
 
-        # ── Step 10: Persist ──
-        self._persist_scores(assessment, subdomain_results, domain_results,
-                             overall_rmi, confidence, maturity)
+        # ── Step 10: Persist (skipped for read-only report generation) ──
+        if persist:
+            self._persist_scores(assessment, subdomain_results, domain_results,
+                                 overall_rmi, confidence, maturity)
 
         return {
             "assessment_id": assessment_id,
