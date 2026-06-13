@@ -54,9 +54,19 @@ class Settings(BaseSettings):
     ]
     ALLOWED_UPLOAD_EXT: List[str] = [".csv", ".xls", ".xlsx", ".pdf", ".png", ".jpg", ".jpeg"]
 
-    # Reporting
+    # Reporting & branding (override via env to rebrand without code changes)
     REPORT_OUTPUT_DIR: str = "./reports"
-    LOGO_PATH: Optional[str] = None
+    LOGO_PATH: Optional[str] = None          # absolute path to firm logo (PNG/SVG-as-PNG)
+    FIRM_NAME: str = "NextBelt LLC"
+    FIRM_TAGLINE: str = "Reliability & Asset Management Advisory"
+    FIRM_WEBSITE: str = "https://next-belt.com"
+    FIRM_EMAIL: str = "nextbelt@next-belt.com"
+    REPORT_CONFIDENTIAL_LABEL: str = "Confidential — Prepared for Client Use Only"
+    # Brand palette (hex). Defaults are a professional pine/slate set; replace
+    # with NextBelt's official colors when supplied.
+    BRAND_PRIMARY_HEX: str = "#0E6E62"   # primary (headers, accents)
+    BRAND_DARK_HEX: str = "#14302B"      # dark text / footer
+    BRAND_ACCENT_HEX: str = "#B8860B"    # secondary accent (callouts)
 
     # Supabase (kept for forward compatibility; backend does not currently use)
     SUPABASE_URL: Optional[str] = None

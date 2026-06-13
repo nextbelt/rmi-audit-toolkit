@@ -17,12 +17,12 @@ import sys
 
 import bcrypt
 
-import models_extra  # noqa: F401 -- registers audit_log + assessment_members
+import models  # noqa: F401 -- registers users + reports
+import models_extra  # noqa: F401 -- registers audit_log + assessment_members + reset-token usage
 import models_v2  # noqa: F401 -- registers v2 tables
 from config import settings
 from database import SessionLocal, init_db
 from models import User
-from question_bank import seed_question_bank
 from question_bank_v2 import seed_domains_and_subdomains, seed_question_bank_v2
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
@@ -39,8 +39,6 @@ def initialize_database() -> None:
 
     db = SessionLocal()
     try:
-        log.info("Seeding v1 question bank…")
-        seed_question_bank(db)
         log.info("Seeding v2 domains + subdomains…")
         seed_domains_and_subdomains(db)
         log.info("Seeding v2 question bank…")
@@ -48,8 +46,14 @@ def initialize_database() -> None:
 
         if settings.INITIAL_ADMIN_EMAIL and settings.INITIAL_ADMIN_PASSWORD:
             if len(settings.INITIAL_ADMIN_PASSWORD) < 12:
-                log.error("INITIAL_ADMIN_PASSWORD must be at least 12 characters.")
-                sys.exit(2)
+                if settings.ENVIRONMENT.lower() == "production":
+                    log.error("INITIAL_ADMIN_PASSWORD must be at least 12 characters.")
+                    sys.exit(2)
+                log.warning(
+                    "INITIAL_ADMIN_PASSWORD is shorter than 12 characters; "
+                    "allowing it only because ENVIRONMENT=%s.",
+                    settings.ENVIRONMENT,
+                )
             existing = db.query(User).filter(User.email == settings.INITIAL_ADMIN_EMAIL).first()
             if existing:
                 log.info("Admin user already exists; skipping.")

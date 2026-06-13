@@ -1,0 +1,72 @@
+name: Code Review Graph
+
+# Automated, blast-radius-aware code review powered by
+# https://github.com/tirth8205/code-review-graph
+#
+# Triggers ("update every couple of days / after a commit"):
+#   - pull_request: review the changed files on every PR push (the core rule).
+#   - schedule:     rebuild the graph twice a week so it never goes stale.
+#   - workflow_dispatch: run on demand.
+
+on:
+  pull_request:
+    branches: [main, stage]
+  schedule:
+    # 06:00 UTC Mondays and Thursdays
+    - cron: "0 6 * * 1,4"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: crg-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    name: Blast-radius review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Posts a sticky, risk-scored PR comment scoped to the change's blast radius.
+      # To make it a hard merge gate later, add: with: { fail-on-risk: high }
+      - name: Code Review Graph
+        uses: tirth8205/code-review-graph@v2.3.6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  refresh:
+    name: Rebuild graph (scheduled)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install code-review-graph
+        run: pip install code-review-graph
+
+      - name: Build graph + token-savings summary
+        run: |
+          code-review-graph build
+          code-review-graph status
+          code-review-graph detect-changes --brief || true
+
+      - name: Upload graph artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: code-review-graph
+          path: .code-review-graph/
+          retention-days: 14

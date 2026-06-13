@@ -1,15 +1,13 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QuestionV2 } from "../api/clientV2";
 import { useV2Store } from "../api/storeV2";
-import { Button, Card } from "../components";
+import { Card, EvidenceWidget, CMMSUploadPanel, ErrorBoundary } from "../components";
 import { theme } from "../styles/theme";
+import { ScoresTab } from "./assessment/ScoresTab";
+import { BenchmarkTab } from "./assessment/BenchmarkTab";
+import { PracticesTab } from "./assessment/PracticesTab";
+import { IsoGapsTab } from "./assessment/IsoGapsTab";
 
 const ROLE_OPTIONS = [
   "ALL",
@@ -40,14 +38,16 @@ export const AssessmentV2Detail: React.FC = () => {
     scoringLoading,
     loadFramework,
     domains,
+    responseExtras,
   } = useV2Store();
 
   const [selectedRole, setSelectedRole] = useState("ALL");
   const [activeTab, setActiveTab] = useState<
-    "interview" | "scores" | "benchmark" | "practices"
+    "interview" | "scores" | "benchmark" | "practices" | "iso"
   >("interview");
   const [currentDomain, setCurrentDomain] = useState<string | null>(null);
   const [currentSubdomain, setCurrentSubdomain] = useState<string | null>(null);
+  const [evidenceFilter, setEvidenceFilter] = useState<"all" | "required" | "not_required">("all");
   const [responses, setResponses] = useState<
     Record<number, { score: number; notes: string }>
   >({});
@@ -56,6 +56,7 @@ export const AssessmentV2Detail: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<
     Record<number, "saving" | "saved" | "error">
   >({});
+  const [saveErrors, setSaveErrors] = useState<Record<number, string>>({});
   const [showGuide, setShowGuide] = useState(false);
   const saveTimers = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const responsesLoaded = useRef(false);
@@ -95,6 +96,11 @@ export const AssessmentV2Detail: React.FC = () => {
   const autoSave = useCallback(
     async (questionId: number, score: number, notes: string) => {
       setSaveStatus((prev) => ({ ...prev, [questionId]: "saving" }));
+      setSaveErrors((prev) => {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      });
       try {
         await submitResponse(id, {
           question_id: questionId,
@@ -104,8 +110,6 @@ export const AssessmentV2Detail: React.FC = () => {
           evidence_notes: notes || undefined,
         });
         setSaveStatus((prev) => ({ ...prev, [questionId]: "saved" }));
-        // Note: submitResponse already calls loadProgress internally
-        // Clear 'saved' indicator after 2s
         setTimeout(() => {
           setSaveStatus((prev) => {
             const next = { ...prev };
@@ -113,8 +117,17 @@ export const AssessmentV2Detail: React.FC = () => {
             return next;
           });
         }, 2000);
-      } catch {
+      } catch (err: any) {
+        const detail =
+          err?.response?.data?.detail ||
+          err?.response?.statusText ||
+          err?.message ||
+          "Unknown error";
+        const msg = typeof detail === "string" ? detail : JSON.stringify(detail);
         setSaveStatus((prev) => ({ ...prev, [questionId]: "error" }));
+        setSaveErrors((prev) => ({ ...prev, [questionId]: msg }));
+        // eslint-disable-next-line no-console
+        console.error(`autoSave q=${questionId} failed:`, err);
       }
     },
     [id, selectedRole, submitResponse]
@@ -182,10 +195,29 @@ export const AssessmentV2Detail: React.FC = () => {
     setActiveTab("scores");
   };
 
-  const currentQuestions =
+  const currentQuestionsAll =
     currentDomain && currentSubdomain
       ? questionTree[currentDomain]?.[currentSubdomain] || []
       : [];
+  const currentQuestions = currentQuestionsAll.filter((q) => {
+    if (evidenceFilter === "required") return q.evidence_required === true;
+    if (evidenceFilter === "not_required") return q.evidence_required === false;
+    return true;
+  });
+
+  // Per-subdomain answered counts (any saved response with a numeric score counts)
+  const subdomainAnswered = useMemo(() => {
+    const counts: Record<string, number> = {};
+    Object.values(questionTree).forEach((subs) => {
+      Object.entries(subs).forEach(([sdCode, qs]) => {
+        counts[sdCode] = qs.reduce(
+          (n, q) => n + ((responses[q.id]?.score ?? 0) > 0 ? 1 : 0),
+          0
+        );
+      });
+    });
+    return counts;
+  }, [questionTree, responses]);
 
   const domainName = (code: string) =>
     domains.find((d) => d.code === code)?.name || code;
@@ -213,24 +245,27 @@ export const AssessmentV2Detail: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: "24px", maxWidth: "1400px", margin: "0 auto" }}>
+    <div className="page">
       {/* Assessment Header */}
-      <div style={{ marginBottom: "24px" }}>
+      <div style={{ marginBottom: 24 }}>
         <button
           onClick={() => navigate("/dashboard")}
           style={{
             background: "none",
             border: "none",
-            color: theme.colors.primary,
+            color: "var(--accent)",
             cursor: "pointer",
-            fontSize: "0.875rem",
+            fontSize: "0.8125rem",
             fontWeight: 500,
             padding: 0,
-            marginBottom: "12px",
-            fontFamily: theme.typography.fontFamily.primary,
+            marginBottom: 14,
+            fontFamily: "inherit",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
           }}
         >
-          ← Back to Dashboard
+          ← Back to Assessments
         </button>
 
         <div
@@ -239,38 +274,42 @@ export const AssessmentV2Detail: React.FC = () => {
             justifyContent: "space-between",
             alignItems: "flex-start",
             flexWrap: "wrap",
-            gap: "16px",
+            gap: 16,
           }}
         >
           <div>
-            <h1
-              style={{
-                fontSize: "1.5rem",
-                margin: "0 0 4px 0",
-                color: "#1A1A1A",
-              }}
-            >
-              {currentAssessment.organization_name}
+            <div className="pg-crumb" style={{ marginBottom: 6 }}>
+              <span>Assessments</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+              <span className="crumb-cur">{currentAssessment.site_name}</span>
+            </div>
+            <h1 className="pg-title" style={{ fontSize: 36, margin: "0 0 8px" }}>
+              <em>{currentAssessment.organization_name.split(" ")[0]}</em>
+              {currentAssessment.organization_name.includes(" ") &&
+                " " + currentAssessment.organization_name.split(" ").slice(1).join(" ")}
             </h1>
-            <p style={{ color: "#8A8A86", fontSize: "0.875rem", margin: 0 }}>
-              {currentAssessment.site_name} ·{" "}
-              {currentAssessment.assessment_mode.toUpperCase()} mode
-              {currentAssessment.industry_module &&
-                ` · ${currentAssessment.industry_module}`}
-            </p>
+            <div className="pg-sub">
+              <span>{currentAssessment.site_name}</span>
+              <span className="dot" />
+              <span className="mono" style={{ textTransform: "uppercase" }}>
+                {currentAssessment.assessment_mode}
+              </span>
+              {currentAssessment.industry_module && (
+                <>
+                  <span className="dot" />
+                  <span>{currentAssessment.industry_module}</span>
+                </>
+              )}
+            </div>
           </div>
           {currentAssessment.overall_rmi != null && (
-            <div style={{ textAlign: "right" }}>
-              <div
-                style={{
-                  fontSize: "2rem",
-                  fontWeight: 700,
-                  color: theme.colors.primary,
-                }}
-              >
+            <div className="card" style={{ padding: "14px 20px", textAlign: "right", minWidth: 160 }}>
+              <div className="label" style={{ marginBottom: 6 }}>Overall RMI</div>
+              <div className="num" style={{ fontSize: 36, color: "var(--accent)" }}>
                 {Number(currentAssessment.overall_rmi).toFixed(2)}
+                <span className="unit" style={{ fontSize: 14, color: "var(--muted)" }}> / 5.0</span>
               </div>
-              <div style={{ fontSize: "0.75rem", color: "#666666" }}>
+              <div style={{ fontSize: 11.5, color: "var(--muted)", marginTop: 4 }}>
                 {currentAssessment.maturity_level}
               </div>
             </div>
@@ -282,13 +321,19 @@ export const AssessmentV2Detail: React.FC = () => {
       <div
         style={{
           display: "flex",
-          gap: "0",
-          borderBottom: "1px solid rgba(0,0,0,0.08)",
-          marginBottom: "24px",
+          gap: 4,
+          borderBottom: "1px solid var(--line)",
+          marginBottom: 24,
         }}
       >
-        {(["interview", "scores", "benchmark", "practices"] as const).map(
-          (tab) => (
+        {([
+          ["interview",  "Interview"],
+          ["scores",     "Scores"],
+          ["benchmark",  "Benchmark"],
+          ["practices",  "Practices"],
+          ["iso",        "ISO 55001"],
+        ] as const).map(
+          ([tab, label]) => (
             <button
               key={tab}
               onClick={() => {
@@ -296,24 +341,23 @@ export const AssessmentV2Detail: React.FC = () => {
                 if (tab === "scores" && !scoringResult) calculateScores(id);
               }}
               style={{
-                padding: "12px 20px",
+                padding: "10px 16px",
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                fontSize: "0.875rem",
+                fontSize: 13.5,
                 fontWeight: 600,
-                textTransform: "capitalize",
-                color: activeTab === tab ? theme.colors.primary : "#666666",
+                color: activeTab === tab ? "var(--accent)" : "var(--ink-2)",
                 borderBottom:
                   activeTab === tab
-                    ? `2px solid ${theme.colors.primary}`
+                    ? "2px solid var(--accent)"
                     : "2px solid transparent",
-                marginBottom: "-2px",
-                fontFamily: theme.typography.fontFamily.primary,
-                transition: "all 0.2s ease",
+                marginBottom: -1,
+                fontFamily: "inherit",
+                transition: "all 0.15s ease",
               }}
             >
-              {tab}
+              {label}
             </button>
           )
         )}
@@ -322,15 +366,19 @@ export const AssessmentV2Detail: React.FC = () => {
       {/* Tab Content */}
       {activeTab === "interview" && (
         <div>
+          {/* CMMS data snapshot */}
+          <ErrorBoundary fallbackLabel="CMMS upload panel failed to render.">
+            <CMMSUploadPanel assessmentId={id} disabled={!!currentAssessment.finalized_at} />
+          </ErrorBoundary>
+
           {/* Assessor Guide Banner */}
-          <Card>
+          <Card style={{ marginBottom: 20 }}>
             <div
               style={{
                 padding: "16px 20px",
-                background: "#F0F7FF",
-                borderRadius: "8px",
-                borderLeft: "4px solid #2563EB",
-                marginBottom: "20px",
+                background: "var(--accent-soft)",
+                borderRadius: 10,
+                borderLeft: "3px solid var(--accent)",
               }}
             >
               <div
@@ -341,18 +389,23 @@ export const AssessmentV2Detail: React.FC = () => {
                 }}
               >
                 <div
-                  style={{ display: "flex", alignItems: "center", gap: "10px" }}
+                  style={{ display: "flex", alignItems: "center", gap: 12 }}
                 >
-                  <span style={{ fontSize: "1.25rem" }}>📋</span>
+                  <div
+                    className="brand-mark"
+                    style={{ width: 28, height: 28, fontSize: 10 }}
+                  >
+                    NB
+                  </div>
                   <div>
-                    <strong style={{ fontSize: "0.875rem", color: "#1E40AF" }}>
+                    <strong style={{ fontSize: 13.5, color: "var(--accent)" }}>
                       NextBelt Assessment Guide
                     </strong>
                     <div
                       style={{
-                        fontSize: "0.75rem",
-                        color: "#475569",
-                        marginTop: "2px",
+                        fontSize: 11.5,
+                        color: "var(--ink-2)",
+                        marginTop: 3,
                       }}
                     >
                       Score each question 1-5 using the rubric. Select the
@@ -361,18 +414,8 @@ export const AssessmentV2Detail: React.FC = () => {
                   </div>
                 </div>
                 <button
+                  className="btn sm"
                   onClick={() => setShowGuide(!showGuide)}
-                  style={{
-                    background: "none",
-                    border: "1px solid #93C5FD",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    padding: "4px 12px",
-                    fontSize: "0.75rem",
-                    color: "#2563EB",
-                    fontWeight: 600,
-                    fontFamily: theme.typography.fontFamily.primary,
-                  }}
                 >
                   {showGuide ? "Hide Guide" : "Show Full Guide"}
                 </button>
@@ -380,30 +423,30 @@ export const AssessmentV2Detail: React.FC = () => {
               {showGuide && (
                 <div
                   style={{
-                    marginTop: "16px",
-                    paddingTop: "16px",
-                    borderTop: "1px solid #BFDBFE",
+                    marginTop: 14,
+                    paddingTop: 14,
+                    borderTop: "1px solid rgba(14, 110, 98, 0.20)",
                   }}
                 >
                   <div
                     style={{
                       display: "grid",
                       gridTemplateColumns: "1fr 1fr",
-                      gap: "20px",
-                      fontSize: "0.8rem",
-                      color: "#334155",
-                      lineHeight: 1.7,
+                      gap: 20,
+                      fontSize: 12.5,
+                      color: "var(--ink-2)",
+                      lineHeight: 1.65,
                     }}
                   >
                     <div>
                       <h4
                         style={{
                           margin: "0 0 8px 0",
-                          color: "#1E40AF",
-                          fontSize: "0.85rem",
+                          color: "var(--accent)",
+                          fontSize: 12.5,
                         }}
                       >
-                        🎯 Scoring Scale (1-5)
+                        Scoring Scale (1-5)
                       </h4>
                       <table
                         style={{
@@ -413,7 +456,7 @@ export const AssessmentV2Detail: React.FC = () => {
                         }}
                       >
                         <tbody>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -428,7 +471,7 @@ export const AssessmentV2Detail: React.FC = () => {
                               ad-hoc only
                             </td>
                           </tr>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -443,7 +486,7 @@ export const AssessmentV2Detail: React.FC = () => {
                               but inconsistent
                             </td>
                           </tr>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -458,7 +501,7 @@ export const AssessmentV2Detail: React.FC = () => {
                               followed, measured
                             </td>
                           </tr>
-                          <tr style={{ borderBottom: "1px solid #DBEAFE" }}>
+                          <tr style={{ borderBottom: "1px solid var(--line-2)" }}>
                             <td
                               style={{
                                 padding: "4px 8px",
@@ -495,11 +538,11 @@ export const AssessmentV2Detail: React.FC = () => {
                       <h4
                         style={{
                           margin: "0 0 8px 0",
-                          color: "#1E40AF",
-                          fontSize: "0.85rem",
+                          color: "var(--accent)",
+                          fontSize: 12.5,
                         }}
                       >
-                        📝 Assessment Best Practices
+                        Assessment Best Practices
                       </h4>
                       <ul
                         style={{
@@ -537,78 +580,42 @@ export const AssessmentV2Detail: React.FC = () => {
                   </div>
                   <div
                     style={{
-                      marginTop: "16px",
-                      padding: "12px",
-                      background: "#DBEAFE",
-                      borderRadius: "6px",
+                      marginTop: 14,
+                      padding: 12,
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--line-2)",
+                      borderRadius: 10,
                     }}
                   >
                     <h4
                       style={{
-                        margin: "0 0 6px 0",
-                        color: "#1E40AF",
-                        fontSize: "0.8rem",
+                        margin: "0 0 8px 0",
+                        color: "var(--ink)",
+                        fontSize: 12,
+                        letterSpacing: "0.08em",
+                        textTransform: "uppercase",
                       }}
                     >
-                      🏗 Assessment Workflow
+                      Assessment Workflow
                     </h4>
                     <div
                       style={{
                         display: "flex",
-                        gap: "4px",
+                        gap: 6,
                         alignItems: "center",
-                        fontSize: "0.75rem",
-                        color: "#1E3A5F",
+                        fontSize: 11.5,
+                        color: "var(--ink-2)",
                         flexWrap: "wrap",
                       }}
                     >
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background:
-                            activeTab === "interview"
-                              ? theme.colors.primary
-                              : "#93C5FD",
-                          color: "#fff",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        1. Interview
-                      </span>
-                      <span>→</span>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background: "#93C5FD",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        2. Calculate Scores
-                      </span>
-                      <span>→</span>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background: "#93C5FD",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        3. Review Benchmark
-                      </span>
-                      <span>→</span>
-                      <span
-                        style={{
-                          padding: "4px 10px",
-                          background: "#93C5FD",
-                          borderRadius: "12px",
-                          fontWeight: 600,
-                        }}
-                      >
-                        4. Practices & Roadmap
-                      </span>
+                      {["Interview", "Calculate Scores", "Review Benchmark", "Practices & Roadmap"].map((step, i, arr) => (
+                        <React.Fragment key={step}>
+                          <span className={`chip ${i === 0 ? "accent" : "muted"}`}>
+                            {i + 1}. {step}
+                          </span>
+                          {i < arr.length - 1 && <span style={{ color: "var(--muted-2)" }}>→</span>}
+                        </React.Fragment>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -619,38 +626,19 @@ export const AssessmentV2Detail: React.FC = () => {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "240px 1fr",
-              gap: "24px",
+              gridTemplateColumns: "260px 1fr",
+              gap: 24,
             }}
           >
             {/* Domain/Subdomain Sidebar */}
-            <div>
-              <div style={{ marginBottom: "16px" }}>
-                <label
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    color: "#666666",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                  }}
-                >
-                  Respondent Role
-                </label>
+            <div className="card" style={{ padding: 16, alignSelf: "start", position: "sticky", top: 80 }}>
+              <div className="field" style={{ marginBottom: 16 }}>
+                <label className="field-label">Respondent Role</label>
                 <select
+                  className="field-input"
                   value={selectedRole}
                   onChange={(e) => setSelectedRole(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "8px",
-                    borderRadius: "6px",
-                    border: "1px solid rgba(0,0,0,0.12)",
-                    fontSize: "0.8rem",
-                    marginTop: "4px",
-                    fontFamily: theme.typography.fontFamily.primary,
-                    background: "#FFFFFF",
-                    color: "#333333",
-                  }}
+                  style={{ fontSize: 12.5 }}
                 >
                   {ROLE_OPTIONS.map((r) => {
                     const totalAll = Object.values(roleCounts).reduce(
@@ -671,22 +659,25 @@ export const AssessmentV2Detail: React.FC = () => {
 
               {/* Progress Bar */}
               {progress && (
-                <div style={{ marginBottom: "20px" }}>
+                <div style={{ marginBottom: 20 }}>
                   <div
                     style={{
-                      fontSize: "0.75rem",
-                      color: "#666666",
-                      marginBottom: "6px",
+                      fontSize: 11,
+                      color: "var(--muted)",
+                      marginBottom: 6,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      display: "flex",
+                      justifyContent: "space-between",
                     }}
                   >
-                    {progress.answered}/{progress.total_questions} answered (
-                    {progress.completion_pct}%)
+                    <span>{progress.answered}/{progress.total_questions}</span>
+                    <span>{progress.completion_pct}%</span>
                   </div>
                   <div
                     style={{
-                      height: "4px",
-                      background: "rgba(0,0,0,0.06)",
-                      borderRadius: "2px",
+                      height: 4,
+                      background: "var(--line-2)",
+                      borderRadius: 999,
                       overflow: "hidden",
                     }}
                   >
@@ -694,8 +685,8 @@ export const AssessmentV2Detail: React.FC = () => {
                       style={{
                         height: "100%",
                         width: `${progress.completion_pct}%`,
-                        background: theme.colors.primary,
-                        borderRadius: "2px",
+                        background: "var(--accent)",
+                        borderRadius: 999,
                         transition: "width 0.3s ease",
                       }}
                     />
@@ -705,8 +696,9 @@ export const AssessmentV2Detail: React.FC = () => {
 
               {/* Domain Tree */}
               <div
-                style={{ display: "flex", flexDirection: "column", gap: "2px" }}
+                style={{ display: "flex", flexDirection: "column", gap: 2 }}
               >
+                <div className="label" style={{ marginBottom: 6 }}>Domains</div>
                 {Object.keys(questionTree).map((domCode) => (
                   <div key={domCode}>
                     <button
@@ -722,26 +714,39 @@ export const AssessmentV2Detail: React.FC = () => {
                         border: "none",
                         background:
                           currentDomain === domCode
-                            ? `${theme.colors.primary}10`
+                            ? "var(--accent-soft)"
                             : "transparent",
-                        borderRadius: "6px",
+                        borderRadius: 8,
                         cursor: "pointer",
-                        fontSize: "0.825rem",
+                        fontSize: 12.5,
                         fontWeight: 600,
                         color:
                           currentDomain === domCode
-                            ? theme.colors.primary
-                            : "#333333",
-                        fontFamily: theme.typography.fontFamily.primary,
+                            ? "var(--accent)"
+                            : "var(--ink)",
+                        fontFamily: "inherit",
                       }}
                     >
-                      {domCode} · {domainName(domCode)}
+                      <span className="mono" style={{ fontSize: 10.5, color: "var(--muted)", marginRight: 6 }}>{domCode}</span>
+                      {domainName(domCode)}
+                      {(() => {
+                        const subs = questionTree[domCode] || {};
+                        const total = Object.values(subs).reduce((n, qs) => n + qs.length, 0);
+                        const answered = Object.keys(subs).reduce(
+                          (n, sd) => n + (subdomainAnswered[sd] ?? 0),
+                          0
+                        );
+                        return (
+                          <span style={{ float: "right", fontSize: 11, color: "var(--muted)", fontWeight: 500 }}>
+                            {answered}/{total}
+                          </span>
+                        );
+                      })()}
                     </button>
-                    {currentDomain === domCode &&
-                      Object.keys(questionTree[domCode]).map((sdCode) => (
+                    {Object.keys(questionTree[domCode]).map((sdCode) => (
                         <button
                           key={sdCode}
-                          onClick={() => setCurrentSubdomain(sdCode)}
+                          onClick={() => { setCurrentDomain(domCode); setCurrentSubdomain(sdCode); }}
                           style={{
                             width: "100%",
                             textAlign: "left",
@@ -749,19 +754,19 @@ export const AssessmentV2Detail: React.FC = () => {
                             border: "none",
                             background:
                               currentSubdomain === sdCode
-                                ? `${theme.colors.primary}18`
+                                ? "var(--accent-soft)"
                                 : "transparent",
-                            borderRadius: "4px",
+                            borderRadius: 6,
                             cursor: "pointer",
-                            fontSize: "0.775rem",
+                            fontSize: 11.5,
                             color:
                               currentSubdomain === sdCode
-                                ? theme.colors.primary
-                                : "#8A8A86",
-                            fontFamily: theme.typography.fontFamily.primary,
+                                ? "var(--accent)"
+                                : "var(--muted)",
+                            fontFamily: "'JetBrains Mono', monospace",
                           }}
                         >
-                          {sdCode} ({questionTree[domCode][sdCode].length})
+                          {sdCode} ({subdomainAnswered[sdCode] ?? 0}/{questionTree[domCode][sdCode].length})
                         </button>
                       ))}
                   </div>
@@ -771,49 +776,72 @@ export const AssessmentV2Detail: React.FC = () => {
               {/* Actions */}
               <div
                 style={{
-                  marginTop: "24px",
+                  marginTop: 20,
+                  paddingTop: 16,
+                  borderTop: "1px solid var(--line-2)",
                   display: "flex",
                   flexDirection: "column",
-                  gap: "8px",
+                  gap: 8,
                 }}
               >
                 <div
                   style={{
-                    fontSize: "0.7rem",
-                    color: "#666666",
+                    fontSize: 11,
+                    color: "var(--ok)",
                     textAlign: "center",
-                    padding: "6px 0",
+                    padding: 4,
                   }}
                 >
-                  ✓ Responses auto-save on selection
+                  ✓ Responses auto-save
                 </div>
-                <Button
+                <button
+                  className="btn primary block"
                   onClick={handleCalculateScores}
-                  style={{ width: "100%", fontSize: "0.8rem" }}
+                  disabled={scoringLoading}
                 >
                   {scoringLoading ? "Calculating..." : "Calculate Scores"}
-                </Button>
+                </button>
               </div>
             </div>
 
             {/* Questions Panel */}
             <div>
               {currentSubdomain && (
-                <div style={{ marginBottom: "16px" }}>
-                  <h2
-                    style={{
-                      fontSize: "1.125rem",
-                      margin: "0 0 4px 0",
-                      color: "#1A1A1A",
-                    }}
-                  >
-                    {subdomainName(currentSubdomain)}
-                  </h2>
-                  <p
-                    style={{ color: "#666666", fontSize: "0.8rem", margin: 0 }}
-                  >
-                    {currentSubdomain} · {currentQuestions.length} questions
-                  </p>
+                <div style={{ marginBottom: "16px", display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                  <div>
+                    <h2
+                      style={{
+                        fontSize: "1.125rem",
+                        margin: "0 0 4px 0",
+                        color: "#1A1A1A",
+                      }}
+                    >
+                      {subdomainName(currentSubdomain)}
+                    </h2>
+                    <p
+                      style={{ color: "#666666", fontSize: "0.8rem", margin: 0 }}
+                    >
+                      {currentSubdomain} · {subdomainAnswered[currentSubdomain] ?? 0}/{currentQuestionsAll.length} answered
+                      {evidenceFilter !== "all" && (
+                        <> · showing {currentQuestions.length} of {currentQuestionsAll.length}</>
+                      )}
+                    </p>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <label style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Evidence
+                    </label>
+                    <select
+                      className="field-input"
+                      value={evidenceFilter}
+                      onChange={(e) => setEvidenceFilter(e.target.value as "all" | "required" | "not_required")}
+                      style={{ fontSize: 12, padding: "6px 8px", width: "auto" }}
+                    >
+                      <option value="all">All questions</option>
+                      <option value="required">Evidence required</option>
+                      <option value="not_required">No evidence</option>
+                    </select>
+                  </div>
                 </div>
               )}
 
@@ -1031,11 +1059,26 @@ export const AssessmentV2Detail: React.FC = () => {
                           )}
                           {saveStatus[q.id] === "error" && (
                             <span style={{ color: "#C53030" }}>
-                              ✗ Error — click score to retry
+                              ✗ Save failed — click score to retry
                             </span>
                           )}
                         </span>
                       </div>
+                      {saveStatus[q.id] === "error" && saveErrors[q.id] && (
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: "0.72rem",
+                            color: "#C53030",
+                            background: "rgba(194, 83, 60, 0.08)",
+                            border: "1px solid rgba(194, 83, 60, 0.25)",
+                            borderRadius: 6,
+                            padding: "6px 8px",
+                          }}
+                        >
+                          {saveErrors[q.id]}
+                        </div>
+                      )}
 
                       {/* Notes — auto-saves after typing stops */}
                       {responses[q.id]?.score && (
@@ -1062,6 +1105,17 @@ export const AssessmentV2Detail: React.FC = () => {
                         />
                       )}
 
+                      {/* Evidence upload + AI analysis */}
+                      <ErrorBoundary fallbackLabel="Evidence widget error.">
+                        <EvidenceWidget
+                          assessmentId={id}
+                          questionId={q.id}
+                          evidenceFile={responseExtras[q.id]?.evidence_file ?? null}
+                          aiAnalysis={responseExtras[q.id]?.ai_analysis ?? null}
+                          onAcceptSuggestedScore={(score) => handleScoreSelect(q.id, score)}
+                        />
+                      </ErrorBoundary>
+
                       {/* Calibration Anchor */}
                       {q.calibration_anchor && (
                         <div
@@ -1084,1513 +1138,33 @@ export const AssessmentV2Detail: React.FC = () => {
         </div>
       )}
 
-      {activeTab === "scores" && <ScoresTab assessmentId={id} />}
+      {activeTab === "scores" && (
+        <ErrorBoundary fallbackLabel="Could not render Scores.">
+          <ScoresTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
 
-      {activeTab === "benchmark" && <BenchmarkTab assessmentId={id} />}
+      {activeTab === "benchmark" && (
+        <ErrorBoundary fallbackLabel="Could not render Benchmark.">
+          <BenchmarkTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
 
-      {activeTab === "practices" && <PracticesTab assessmentId={id} />}
-    </div>
-  );
-};
+      {activeTab === "practices" && (
+        <ErrorBoundary fallbackLabel="Could not render Practices.">
+          <PracticesTab assessmentId={id} />
+        </ErrorBoundary>
+      )}
 
-// ═══════════════════════════════════════════
-//  Scores Tab
-// ═══════════════════════════════════════════
-const ScoresTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
-  const { scoringResult, scoringLoading, calculateScores, domains } =
-    useV2Store();
-
-  const domainName = (code: string) =>
-    domains.find((d) => d.code === code)?.name || code;
-  const subdomainName = (code: string) => {
-    for (const d of domains) {
-      const sd = d.subdomains.find((s: any) => s.code === code);
-      if (sd) return sd.name;
-    }
-    return code;
-  };
-
-  useEffect(() => {
-    if (!scoringResult) calculateScores(assessmentId);
-  }, [assessmentId]);
-
-  if (scoringLoading)
-    return (
-      <div style={{ textAlign: "center", padding: "40px" }}>
-        <div className="spinner" />
-      </div>
-    );
-  if (!scoringResult)
-    return (
-      <div style={{ textAlign: "center", padding: "40px", color: "#666666" }}>
-        No scores available. Complete some questions first.
-      </div>
-    );
-
-  const {
-    overall_rmi,
-    maturity_level,
-    confidence,
-    confidence_score,
-    blind_spots,
-    iso_55001_readiness,
-  } = scoringResult;
-  const confidenceVal = confidence_score ?? confidence ?? 0;
-
-  // Backend returns domains as a dict { "AM": { score, subdomains: { "AM.1": {...} } } }
-  // Convert to array for rendering
-  const domainScores = Object.entries(scoringResult.domains || {}).map(
-    ([code, data]: [string, any]) => ({
-      domain_code: code,
-      domain_name: domainName(code),
-      score: data.score,
-      subdomains: Object.entries(data.subdomains || {}).map(
-        ([sdCode, sdData]: [string, any]) => ({
-          subdomain_code: sdCode,
-          subdomain_name: subdomainName(sdCode),
-          final_score: sdData.final_score,
-          cap_applied: sdData.cap_applied,
-        })
-      ),
-    })
-  );
-
-  const getScoreColor = (score: number) => {
-    if (score >= 4.3) return "#0D8A5E";
-    if (score >= 3.6) return theme.colors.primary;
-    if (score >= 3.0) return "#B8860B";
-    if (score >= 2.0) return "#C0603F";
-    return "#C53030";
-  };
-
-  return (
-    <div>
-      {/* Overall Score */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr",
-          gap: "24px",
-          marginBottom: "32px",
-        }}
-      >
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Overall RMI
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: getScoreColor(overall_rmi ?? 0),
-              }}
-            >
-              {(overall_rmi ?? 0).toFixed(2)}
-            </div>
-            <div
-              style={{
-                fontSize: "0.825rem",
-                color: "#8A8A86",
-                marginTop: "4px",
-              }}
-            >
-              {maturity_level}
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Confidence
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: theme.colors.primary,
-              }}
-            >
-              {(confidenceVal * 100).toFixed(0)}%
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              ISO 55001 Ready
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: (iso_55001_readiness ?? 0) >= 70 ? "#0D8A5E" : "#C0603F",
-              }}
-            >
-              {(iso_55001_readiness ?? 0).toFixed(0)}%
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "24px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.75rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Blind Spots
-            </div>
-            <div
-              style={{
-                fontSize: "2.5rem",
-                fontWeight: 700,
-                color: (blind_spots ?? []).length > 0 ? "#C53030" : "#0D8A5E",
-              }}
-            >
-              {(blind_spots ?? []).length}
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Domain Breakdown */}
-      <h3
-        style={{ fontSize: "1.125rem", marginBottom: "16px", color: "#1A1A1A" }}
-      >
-        Domain Scores
-      </h3>
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {(domainScores || []).map((d) => (
-          <Card key={d.domain_code}>
-            <div style={{ padding: "20px" }}>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "12px",
-                }}
-              >
-                <div>
-                  <span style={{ fontWeight: 600, color: "#333333" }}>
-                    {d.domain_code} · {d.domain_name}
-                  </span>
-                </div>
-                <div
-                  style={{
-                    fontSize: "1.5rem",
-                    fontWeight: 700,
-                    color: getScoreColor(d.score ?? 0),
-                  }}
-                >
-                  {(d.score ?? 0).toFixed(2)}
-                </div>
-              </div>
-              {/* Subdomain bars */}
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
-              >
-                {(d.subdomains || []).map((sd) => (
-                  <div
-                    key={sd.subdomain_code}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "12px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "220px",
-                        fontSize: "0.75rem",
-                        color: "#8A8A86",
-                      }}
-                    >
-                      <span
-                        style={{ fontFamily: "'IBM Plex Mono', monospace" }}
-                      >
-                        {sd.subdomain_code}
-                      </span>
-                      <span style={{ marginLeft: "6px", color: "#666666" }}>
-                        {sd.subdomain_name}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        flex: 1,
-                        height: "8px",
-                        background: "rgba(0,0,0,0.06)",
-                        borderRadius: "4px",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <div
-                        style={{
-                          height: "100%",
-                          width: `${((sd.final_score ?? 0) / 5) * 100}%`,
-                          background: getScoreColor(sd.final_score ?? 0),
-                          borderRadius: "4px",
-                          transition: "width 0.5s ease",
-                        }}
-                      />
-                    </div>
-                    <div
-                      style={{
-                        width: "50px",
-                        textAlign: "right",
-                        fontSize: "0.825rem",
-                        fontWeight: 600,
-                        color: getScoreColor(sd.final_score ?? 0),
-                      }}
-                    >
-                      {(sd.final_score ?? 0).toFixed(1)}
-                    </div>
-                    {sd.cap_applied && (
-                      <span
-                        style={{
-                          fontSize: "0.65rem",
-                          padding: "1px 6px",
-                          borderRadius: "4px",
-                          background: "rgba(248,113,113,0.12)",
-                          color: "#F87171",
-                          fontWeight: 600,
-                        }}
-                      >
-                        CAPPED
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Blind Spots */}
-      {blind_spots.length > 0 && (
-        <div style={{ marginTop: "24px" }}>
-          <h3
-            style={{
-              fontSize: "1.125rem",
-              marginBottom: "12px",
-              color: "#C53030",
-            }}
-          >
-            ⚠️ Blind Spots Detected
-          </h3>
-          <Card>
-            <div style={{ padding: "16px" }}>
-              {blind_spots.map((b, i) => (
-                <div
-                  key={i}
-                  style={{
-                    padding: "8px 0",
-                    fontSize: "0.875rem",
-                    color: "#333333",
-                    borderBottom:
-                      i < blind_spots.length - 1
-                        ? "1px solid rgba(0,0,0,0.06)"
-                        : "none",
-                  }}
-                >
-                  {b}
-                </div>
-              ))}
-            </div>
-          </Card>
-        </div>
+      {activeTab === "iso" && (
+        <ErrorBoundary fallbackLabel="Could not render ISO 55001 gap report.">
+          <IsoGapsTab assessmentId={id} />
+        </ErrorBoundary>
       )}
     </div>
   );
 };
 
 // ═══════════════════════════════════════════
-//  Benchmark Tab
+//  Scores Tab — calibration-style maturity readout
 // ═══════════════════════════════════════════
-const BenchmarkTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
-  const {
-    benchmark,
-    benchmarkLoading,
-    loadBenchmark,
-    currentAssessment,
-    scoringResult,
-    domains,
-  } = useV2Store();
-  const domainName = (code: string) =>
-    domains.find((d) => d.code === code)?.name || code;
-  const hasScores =
-    (currentAssessment?.overall_rmi != null &&
-      currentAssessment.overall_rmi > 0) ||
-    scoringResult != null;
-
-  useEffect(() => {
-    if (hasScores) {
-      loadBenchmark(assessmentId);
-    }
-  }, [assessmentId, hasScores]);
-
-  if (!hasScores)
-    return (
-      <div style={{ textAlign: "center", padding: "60px", color: "#666666" }}>
-        <div style={{ fontSize: "3rem", marginBottom: "16px" }}>📊</div>
-        <h3 style={{ color: "#1A1A1A" }}>Score the Assessment First</h3>
-        <p>
-          Go to the Interview tab, answer questions, then click "Calculate
-          Scores" to enable benchmarking.
-        </p>
-      </div>
-    );
-
-  if (benchmarkLoading)
-    return (
-      <div style={{ textAlign: "center", padding: "40px" }}>
-        <div className="spinner" />
-      </div>
-    );
-
-  // Handle insufficient peers or no benchmark yet
-  if (!benchmark || benchmark.status === "insufficient_peers") {
-    const peerCount = benchmark?.peer_count ?? 0;
-    const minReq = benchmark?.min_required ?? 5;
-    return (
-      <div style={{ padding: "0" }}>
-        {/* Explanation Banner */}
-        <Card>
-          <div
-            style={{
-              padding: "24px",
-              background: "#F0F7FF",
-              borderRadius: "8px",
-              borderLeft: "4px solid #2563EB",
-            }}
-          >
-            <h3
-              style={{
-                margin: "0 0 8px 0",
-                fontSize: "1rem",
-                color: "#1E40AF",
-              }}
-            >
-              📊 What is Benchmarking?
-            </h3>
-            <p
-              style={{
-                margin: "0 0 12px 0",
-                fontSize: "0.875rem",
-                color: "#334155",
-                lineHeight: 1.6,
-              }}
-            >
-              Benchmarking compares this site's RMI scores against{" "}
-              <strong>anonymized peer assessments</strong> from similar
-              organizations. It shows where the site ranks in percentile terms
-              (e.g., P75 = better than 75% of peers).
-            </p>
-            <div
-              style={{
-                display: "flex",
-                gap: "16px",
-                flexWrap: "wrap",
-                fontSize: "0.8rem",
-                color: "#475569",
-              }}
-            >
-              <span>
-                🏭 Peers matched by:{" "}
-                <strong>Industry, Size, Assessment Mode</strong>
-              </span>
-              <span>
-                🔒 All peer data is <strong>anonymized</strong> — no site names
-                revealed
-              </span>
-              <span>
-                📈 Minimum <strong>{minReq} peers</strong> required for
-                statistical validity
-              </span>
-            </div>
-          </div>
-        </Card>
-
-        <div
-          style={{
-            marginTop: "24px",
-            textAlign: "center",
-            padding: "40px",
-            color: "#666666",
-          }}
-        >
-          <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>🔍</div>
-          <h3 style={{ color: "#1A1A1A", marginBottom: "8px" }}>
-            Building Peer Group
-          </h3>
-          <p style={{ maxWidth: "500px", margin: "0 auto", lineHeight: 1.6 }}>
-            Currently <strong>{peerCount}</strong> of <strong>{minReq}</strong>{" "}
-            required comparable assessments found. As NextBelt conducts more
-            assessments in this industry segment, benchmarking will
-            automatically activate.
-          </p>
-          <div style={{ marginTop: "24px" }}>
-            <Card>
-              <div style={{ padding: "20px" }}>
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#666666",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.05em",
-                    marginBottom: "12px",
-                  }}
-                >
-                  Your Current Score
-                </div>
-                <div
-                  style={{
-                    fontSize: "2.5rem",
-                    fontWeight: 700,
-                    color: theme.colors.primary,
-                  }}
-                >
-                  {Number(currentAssessment?.overall_rmi ?? 0).toFixed(2)}
-                </div>
-                <div
-                  style={{
-                    fontSize: "0.825rem",
-                    color: "#666666",
-                    marginTop: "4px",
-                  }}
-                >
-                  {currentAssessment?.maturity_level}
-                </div>
-              </div>
-            </Card>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const getQuartileColor = (q: number) => {
-    if (q === 1) return "#0D8A5E";
-    if (q === 2) return theme.colors.primary;
-    if (q === 3) return "#B8860B";
-    return "#C53030";
-  };
-
-  const getQuartileLabel = (q: number) => {
-    if (q === 1) return "Top Quartile";
-    if (q === 2) return "2nd Quartile";
-    if (q === 3) return "3rd Quartile";
-    return "Bottom Quartile";
-  };
-
-  return (
-    <div>
-      {/* Info Banner */}
-      <Card>
-        <div
-          style={{
-            padding: "16px 20px",
-            background: "#F0F7FF",
-            borderRadius: "8px",
-            borderLeft: "4px solid #2563EB",
-            marginBottom: "24px",
-          }}
-        >
-          <div
-            style={{ display: "flex", alignItems: "flex-start", gap: "12px" }}
-          >
-            <span style={{ fontSize: "1.25rem" }}>ℹ️</span>
-            <div
-              style={{
-                fontSize: "0.825rem",
-                color: "#334155",
-                lineHeight: 1.6,
-              }}
-            >
-              <strong>How to read this:</strong> Percentile (P) shows what
-              percentage of peer sites scored lower.
-              <strong> P75</strong> = better than 75% of peers.{" "}
-              <strong>Quartile 1</strong> = top 25%. Compared against{" "}
-              <strong>{benchmark.peer_count}</strong> anonymized sites in the
-              same industry.
-            </div>
-          </div>
-        </div>
-      </Card>
-
-      {/* Summary Cards */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr 1fr",
-          gap: "20px",
-          marginBottom: "32px",
-        }}
-      >
-        <Card>
-          <div style={{ padding: "20px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Your RMI Score
-            </div>
-            <div
-              style={{
-                fontSize: "2rem",
-                fontWeight: 700,
-                color: theme.colors.primary,
-              }}
-            >
-              {Number(benchmark.overall_rmi ?? 0).toFixed(2)}
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "20px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Percentile Rank
-            </div>
-            <div
-              style={{
-                fontSize: "2rem",
-                fontWeight: 700,
-                color: getQuartileColor(benchmark.quartile),
-              }}
-            >
-              P{benchmark.overall_percentile}
-            </div>
-            <div
-              style={{ fontSize: "0.7rem", color: "#999", marginTop: "2px" }}
-            >
-              Better than {benchmark.overall_percentile}% of peers
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "20px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Quartile
-            </div>
-            <div
-              style={{
-                fontSize: "2rem",
-                fontWeight: 700,
-                color: getQuartileColor(benchmark.quartile),
-              }}
-            >
-              Q{benchmark.quartile}
-            </div>
-            <div
-              style={{ fontSize: "0.7rem", color: "#999", marginTop: "2px" }}
-            >
-              {getQuartileLabel(benchmark.quartile)}
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div style={{ padding: "20px", textAlign: "center" }}>
-            <div
-              style={{
-                fontSize: "0.7rem",
-                color: "#666666",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "8px",
-              }}
-            >
-              Peer Group
-            </div>
-            <div
-              style={{ fontSize: "2rem", fontWeight: 700, color: "#333333" }}
-            >
-              {benchmark.peer_count}
-            </div>
-            <div
-              style={{ fontSize: "0.7rem", color: "#999", marginTop: "2px" }}
-            >
-              comparable sites
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      {/* Peer Group Statistics */}
-      {benchmark.peer_stats && benchmark.peer_stats.mean != null && (
-        <>
-          <h3
-            style={{ fontSize: "1rem", marginBottom: "12px", color: "#1A1A1A" }}
-          >
-            Peer Group Statistics
-          </h3>
-          <Card>
-            <div style={{ padding: "20px" }}>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(4, 1fr)",
-                  gap: "16px",
-                  textAlign: "center",
-                }}
-              >
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#999",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Peer Average
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "1.25rem",
-                      fontWeight: 700,
-                      color: "#333",
-                    }}
-                  >
-                    {benchmark.peer_stats.mean?.toFixed(2)}
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#999",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Peer Min
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "1.25rem",
-                      fontWeight: 700,
-                      color: "#C53030",
-                    }}
-                  >
-                    {benchmark.peer_stats.min?.toFixed(2)}
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#999",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Peer Max
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "1.25rem",
-                      fontWeight: 700,
-                      color: "#0D8A5E",
-                    }}
-                  >
-                    {benchmark.peer_stats.max?.toFixed(2)}
-                  </div>
-                </div>
-                <div>
-                  <div
-                    style={{
-                      fontSize: "0.7rem",
-                      color: "#999",
-                      textTransform: "uppercase",
-                      marginBottom: "4px",
-                    }}
-                  >
-                    Std Deviation
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "1.25rem",
-                      fontWeight: 700,
-                      color: "#666",
-                    }}
-                  >
-                    {benchmark.peer_stats.std_dev?.toFixed(2) ?? "—"}
-                  </div>
-                </div>
-              </div>
-              {/* Visual position indicator */}
-              <div
-                style={{
-                  marginTop: "20px",
-                  padding: "16px",
-                  background: "#FAFAFA",
-                  borderRadius: "8px",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: "0.75rem",
-                    color: "#666",
-                    marginBottom: "8px",
-                  }}
-                >
-                  Your position among peers:
-                </div>
-                <div
-                  style={{
-                    position: "relative",
-                    height: "24px",
-                    background: "#E5E5E5",
-                    borderRadius: "12px",
-                    overflow: "visible",
-                  }}
-                >
-                  {/* Peer range bar */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      height: "100%",
-                      borderRadius: "12px",
-                      background: "linear-gradient(90deg, #FCD34D, #34D399)",
-                      left: `${((benchmark.peer_stats.min ?? 1) / 5) * 100}%`,
-                      width: `${
-                        (((benchmark.peer_stats.max ?? 5) -
-                          (benchmark.peer_stats.min ?? 1)) /
-                          5) *
-                        100
-                      }%`,
-                    }}
-                  />
-                  {/* Your score marker */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      top: "-4px",
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      background: theme.colors.primary,
-                      border: "3px solid white",
-                      boxShadow: "0 2px 8px rgba(0,0,0,0.2)",
-                      left: `calc(${
-                        ((benchmark.overall_rmi ?? 0) / 5) * 100
-                      }% - 16px)`,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "white",
-                      fontSize: "0.6rem",
-                      fontWeight: 700,
-                    }}
-                  >
-                    You
-                  </div>
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    marginTop: "8px",
-                    fontSize: "0.7rem",
-                    color: "#999",
-                  }}
-                >
-                  <span>1.0</span>
-                  <span>2.0</span>
-                  <span>3.0</span>
-                  <span>4.0</span>
-                  <span>5.0</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-        </>
-      )}
-
-      {/* Domain Percentiles */}
-      {benchmark.domain_percentiles &&
-        Object.keys(benchmark.domain_percentiles).length > 0 && (
-          <div style={{ marginTop: "24px" }}>
-            <h3
-              style={{
-                fontSize: "1rem",
-                marginBottom: "12px",
-                color: "#1A1A1A",
-              }}
-            >
-              Domain Percentiles
-            </h3>
-            <Card>
-              <div style={{ padding: "20px" }}>
-                {Object.entries(benchmark.domain_percentiles).map(
-                  ([domain, data]: [string, any]) => {
-                    const pct =
-                      typeof data === "object" ? data.percentile : data;
-                    const score = typeof data === "object" ? data.score : null;
-                    const dq = typeof data === "object" ? data.quartile : null;
-                    return (
-                      <div
-                        key={domain}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          padding: "12px 0",
-                          borderBottom: "1px solid rgba(0,0,0,0.04)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "200px",
-                            fontWeight: 600,
-                            fontSize: "0.825rem",
-                            color: "#333333",
-                          }}
-                        >
-                          {domainName(domain)}
-                        </div>
-                        {score != null && (
-                          <div
-                            style={{
-                              width: "50px",
-                              fontSize: "0.8rem",
-                              fontWeight: 600,
-                              color: "#666",
-                            }}
-                          >
-                            {score.toFixed(1)}
-                          </div>
-                        )}
-                        <div
-                          style={{
-                            flex: 1,
-                            height: "10px",
-                            background: "#F0F0F0",
-                            borderRadius: "5px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          <div
-                            style={{
-                              height: "100%",
-                              width: `${pct ?? 0}%`,
-                              borderRadius: "5px",
-                              background:
-                                (pct ?? 0) >= 75
-                                  ? "#0D8A5E"
-                                  : (pct ?? 0) >= 50
-                                  ? theme.colors.primary
-                                  : (pct ?? 0) >= 25
-                                  ? "#B8860B"
-                                  : "#C53030",
-                              transition: "width 0.5s ease",
-                            }}
-                          />
-                        </div>
-                        <div
-                          style={{
-                            width: "45px",
-                            textAlign: "right",
-                            fontWeight: 700,
-                            fontSize: "0.825rem",
-                            color: getQuartileColor(dq ?? 4),
-                          }}
-                        >
-                          P{pct ?? 0}
-                        </div>
-                        {dq != null && (
-                          <div
-                            style={{
-                              width: "30px",
-                              textAlign: "center",
-                              fontSize: "0.7rem",
-                              fontWeight: 600,
-                              color: getQuartileColor(dq),
-                              background: `${getQuartileColor(dq)}15`,
-                              padding: "2px 6px",
-                              borderRadius: "4px",
-                            }}
-                          >
-                            Q{dq}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  }
-                )}
-              </div>
-            </Card>
-          </div>
-        )}
-
-      {/* Assessment Tips */}
-      <Card>
-        <div
-          style={{
-            padding: "16px 20px",
-            marginTop: "24px",
-            background: "#FFFBEB",
-            borderRadius: "8px",
-            borderLeft: "4px solid #F59E0B",
-          }}
-        >
-          <h4
-            style={{
-              margin: "0 0 8px 0",
-              fontSize: "0.875rem",
-              color: "#92400E",
-            }}
-          >
-            💡 Assessor Guidance
-          </h4>
-          <ul
-            style={{
-              margin: 0,
-              paddingLeft: "20px",
-              fontSize: "0.8rem",
-              color: "#78350F",
-              lineHeight: 1.8,
-            }}
-          >
-            <li>
-              Percentile rankings are based on{" "}
-              <strong>anonymized peer data</strong> — never share raw peer
-              scores with clients.
-            </li>
-            <li>
-              Q1 (Top Quartile) sites typically have mature, proactive
-              reliability programs with formal processes.
-            </li>
-            <li>
-              Domain-level gaps highlight where the client can focus improvement
-              efforts for maximum impact.
-            </li>
-            <li>
-              Use the <strong>Practices tab</strong> to generate specific,
-              prioritized improvement recommendations.
-            </li>
-          </ul>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-// ═══════════════════════════════════════════
-//  Practices Tab
-// ═══════════════════════════════════════════
-const PracticesTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
-  const {
-    recommendations,
-    recommendationsData,
-    recommendationsLoading,
-    loadRecommendations,
-    currentAssessment,
-    scoringResult,
-  } = useV2Store();
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const hasScores =
-    (currentAssessment?.overall_rmi != null &&
-      currentAssessment.overall_rmi > 0) ||
-    scoringResult != null;
-
-  useEffect(() => {
-    if (hasScores) {
-      loadRecommendations(assessmentId);
-    }
-  }, [assessmentId, hasScores]);
-
-  if (!hasScores)
-    return (
-      <div style={{ textAlign: "center", padding: "60px", color: "#666666" }}>
-        <div style={{ fontSize: "3rem", marginBottom: "16px" }}>📚</div>
-        <h3 style={{ color: "#1A1A1A" }}>Score the Assessment First</h3>
-        <p>
-          Go to the Interview tab, answer questions, then click "Calculate
-          Scores" to generate improvement recommendations.
-        </p>
-      </div>
-    );
-
-  if (recommendationsLoading)
-    return (
-      <div style={{ textAlign: "center", padding: "40px" }}>
-        <div className="spinner" />
-      </div>
-    );
-
-  const pathway = recommendationsData?.pathway;
-
-  const getImpactBadge = (impact: string) => {
-    const colors: Record<string, { bg: string; text: string }> = {
-      high: { bg: "rgba(13,138,94,0.1)", text: "#0D8A5E" },
-      medium: { bg: "rgba(184,134,11,0.1)", text: "#B8860B" },
-      low: { bg: "rgba(102,102,102,0.1)", text: "#666666" },
-    };
-    const c = colors[impact] || colors.medium;
-    return { background: c.bg, color: c.text };
-  };
-
-  const getEffortBadge = (effort: string) => {
-    const colors: Record<string, { bg: string; text: string }> = {
-      low: { bg: "rgba(13,138,94,0.1)", text: "#0D8A5E" },
-      medium: { bg: "rgba(184,134,11,0.1)", text: "#B8860B" },
-      high: { bg: "rgba(197,48,48,0.1)", text: "#C53030" },
-    };
-    const c = colors[effort] || colors.medium;
-    return { background: c.bg, color: c.text };
-  };
-
-  return (
-    <div>
-      {/* Maturity Pathway Card */}
-      {pathway && (
-        <Card>
-          <div
-            style={{
-              padding: "20px",
-              background: "#F0FDF4",
-              borderRadius: "8px",
-              borderLeft: "4px solid #0D8A5E",
-              marginBottom: "24px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-                marginBottom: "12px",
-              }}
-            >
-              <span style={{ fontSize: "1.5rem" }}>🎯</span>
-              <div>
-                <h3 style={{ margin: 0, fontSize: "1rem", color: "#166534" }}>
-                  Maturity Pathway: Level {pathway.from_level} → Level{" "}
-                  {pathway.to_level}
-                </h3>
-                <div
-                  style={{
-                    fontSize: "0.825rem",
-                    color: "#15803D",
-                    marginTop: "2px",
-                  }}
-                >
-                  Focus: <strong>{pathway.focus}</strong> · Timeline:{" "}
-                  <strong>{pathway.typical_timeline}</strong>
-                </div>
-              </div>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                flexWrap: "wrap",
-                marginTop: "8px",
-              }}
-            >
-              {(pathway.key_themes || []).map((t: string, i: number) => (
-                <span
-                  key={i}
-                  style={{
-                    fontSize: "0.75rem",
-                    padding: "4px 10px",
-                    borderRadius: "12px",
-                    background: "rgba(13,138,94,0.08)",
-                    color: "#166534",
-                    fontWeight: 500,
-                  }}
-                >
-                  {t}
-                </span>
-              ))}
-            </div>
-          </div>
-        </Card>
-      )}
-
-      {/* Assessor Guidance */}
-      <Card>
-        <div
-          style={{
-            padding: "16px 20px",
-            background: "#F0F7FF",
-            borderRadius: "8px",
-            borderLeft: "4px solid #2563EB",
-            marginBottom: "24px",
-          }}
-        >
-          <h4
-            style={{
-              margin: "0 0 8px 0",
-              fontSize: "0.875rem",
-              color: "#1E40AF",
-            }}
-          >
-            💡 Assessor Guidance — Presenting Recommendations
-          </h4>
-          <ul
-            style={{
-              margin: 0,
-              paddingLeft: "20px",
-              fontSize: "0.8rem",
-              color: "#334155",
-              lineHeight: 1.8,
-            }}
-          >
-            <li>
-              <strong>Priority Score</strong> combines impact potential,
-              feasibility (inverse of effort), and urgency (lower scores = more
-              urgent).
-            </li>
-            <li>
-              Start with <strong>high-impact, low-effort</strong> quick wins to
-              build momentum.
-            </li>
-            <li>
-              Critical path items (🔴) are prerequisites — they must be
-              addressed before higher maturity levels are achievable.
-            </li>
-            <li>
-              Discuss timelines and tools with the client to build a realistic
-              implementation roadmap.
-            </li>
-          </ul>
-        </div>
-      </Card>
-
-      {/* Summary */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: "16px",
-        }}
-      >
-        <h3 style={{ fontSize: "1rem", margin: 0, color: "#1A1A1A" }}>
-          Top Improvement Recommendations
-          <span
-            style={{
-              fontWeight: 400,
-              color: "#999",
-              marginLeft: "8px",
-              fontSize: "0.825rem",
-            }}
-          >
-            (
-            {recommendationsData?.total_recommendations ??
-              recommendations.length}{" "}
-            total, showing top {recommendations.length})
-          </span>
-        </h3>
-      </div>
-
-      {/* No recommendations message */}
-      {recommendations.length === 0 && (
-        <div style={{ textAlign: "center", padding: "40px", color: "#666" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "12px" }}>📋</div>
-          <h3 style={{ color: "#1A1A1A" }}>No Recommendations Generated</h3>
-          <p>
-            This can happen if the practice library is still being loaded or if
-            all subdomains are already at maximum maturity. Try recalculating
-            scores.
-          </p>
-        </div>
-      )}
-
-      {/* Recommendation Cards */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-        {recommendations.map((rec, i) => {
-          const isExpanded = expandedId === rec.practice_id;
-          return (
-            <Card key={rec.practice_id}>
-              <div style={{ padding: "20px" }}>
-                {/* Header Row */}
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "16px",
-                    alignItems: "flex-start",
-                    cursor: "pointer",
-                  }}
-                  onClick={() =>
-                    setExpandedId(isExpanded ? null : rec.practice_id)
-                  }
-                >
-                  <div
-                    style={{
-                      width: "32px",
-                      height: "32px",
-                      borderRadius: "50%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      background: i < 3 ? theme.colors.primary : "#E5E5E5",
-                      color: i < 3 ? "#fff" : "#666",
-                      fontWeight: 700,
-                      fontSize: "0.875rem",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {i + 1}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          fontSize: "0.95rem",
-                          color: "#1A1A1A",
-                        }}
-                      >
-                        {rec.title}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: "#666",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      {rec.subdomain_code} · {rec.subdomain_name}
-                    </div>
-
-                    {/* Badges */}
-                    <div
-                      style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                          background: "#F0F0F0",
-                          color: "#333",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Score {rec.current_score?.toFixed(1)} → Level{" "}
-                        {rec.target_level}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                          fontWeight: 600,
-                          ...getImpactBadge(rec.impact),
-                        }}
-                      >
-                        Impact: {rec.impact}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                          fontWeight: 600,
-                          ...getEffortBadge(rec.effort),
-                        }}
-                      >
-                        Effort: {rec.effort}
-                      </span>
-                      {rec.timeline && (
-                        <span
-                          style={{
-                            fontSize: "0.7rem",
-                            padding: "2px 8px",
-                            borderRadius: "10px",
-                            background: `${theme.colors.primary}10`,
-                            color: theme.colors.primary,
-                            fontWeight: 600,
-                          }}
-                        >
-                          ⏱ {rec.timeline}
-                        </span>
-                      )}
-                      <span
-                        style={{
-                          fontSize: "0.7rem",
-                          padding: "2px 8px",
-                          borderRadius: "10px",
-                          background: "#F5F5F5",
-                          color: "#999",
-                          fontWeight: 600,
-                        }}
-                      >
-                        Priority: {((rec.priority_score ?? 0) * 100).toFixed(0)}
-                      </span>
-                    </div>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      color: "#999",
-                      marginTop: "4px",
-                    }}
-                  >
-                    {isExpanded ? "▾" : "▸"}
-                  </span>
-                </div>
-
-                {/* Expanded Details */}
-                {isExpanded && (
-                  <div
-                    style={{
-                      marginTop: "16px",
-                      paddingTop: "16px",
-                      borderTop: "1px solid #F0F0F0",
-                    }}
-                  >
-                    {rec.description && (
-                      <div
-                        style={{
-                          fontSize: "0.85rem",
-                          color: "#333",
-                          lineHeight: 1.7,
-                          marginBottom: "16px",
-                        }}
-                      >
-                        {rec.description}
-                      </div>
-                    )}
-
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "1fr 1fr",
-                        gap: "16px",
-                      }}
-                    >
-                      {/* Success Metrics */}
-                      {rec.success_metrics &&
-                        rec.success_metrics.length > 0 && (
-                          <div>
-                            <div
-                              style={{
-                                fontSize: "0.75rem",
-                                fontWeight: 700,
-                                color: "#0D8A5E",
-                                textTransform: "uppercase",
-                                marginBottom: "6px",
-                              }}
-                            >
-                              ✅ Success Metrics
-                            </div>
-                            <ul
-                              style={{
-                                margin: 0,
-                                paddingLeft: "16px",
-                                fontSize: "0.8rem",
-                                color: "#333",
-                                lineHeight: 1.8,
-                              }}
-                            >
-                              {rec.success_metrics.map(
-                                (m: string, j: number) => (
-                                  <li key={j}>{m}</li>
-                                )
-                              )}
-                            </ul>
-                          </div>
-                        )}
-
-                      {/* Tools */}
-                      {rec.tools && rec.tools.length > 0 && (
-                        <div>
-                          <div
-                            style={{
-                              fontSize: "0.75rem",
-                              fontWeight: 700,
-                              color: theme.colors.primary,
-                              textTransform: "uppercase",
-                              marginBottom: "6px",
-                            }}
-                          >
-                            🛠 Tools & Templates
-                          </div>
-                          <ul
-                            style={{
-                              margin: 0,
-                              paddingLeft: "16px",
-                              fontSize: "0.8rem",
-                              color: "#333",
-                              lineHeight: 1.8,
-                            }}
-                          >
-                            {rec.tools.map((t: string, j: number) => (
-                              <li key={j}>{t}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-    </div>
-  );
-};

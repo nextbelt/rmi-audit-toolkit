@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Button, Card, Input } from '../components';
+import React, { useEffect, useState } from 'react';
+import { Button, Input, Modal } from '../components';
 import api from '../api/client';
 
 interface User {
@@ -11,15 +11,44 @@ interface User {
   created_at: string;
 }
 
+const PlusIcon: React.FC = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const UsersIcon: React.FC<{ size?: number }> = ({ size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
+const ChevronRightIcon: React.FC<{ size?: number }> = ({ size = 11 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const ROLE_META: Record<string, { cls: string; label: string }> = {
+  admin:   { cls: 'accent', label: 'Admin' },
+  auditor: { cls: 'ok',     label: 'Auditor' },
+  client:  { cls: 'muted',  label: 'Client' },
+};
+
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     full_name: '',
-    role: 'auditor'
+    role: 'auditor',
   });
 
   useEffect(() => {
@@ -39,14 +68,15 @@ export const UserManagement: React.FC = () => {
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
     try {
       await api.post('/register', formData);
-      alert('User created successfully!');
       setShowCreateModal(false);
       setFormData({ email: '', password: '', full_name: '', role: 'auditor' });
       loadUsers();
     } catch (error: any) {
-      alert(error.response?.data?.detail || 'Failed to create user');
+      const msg = error?.response?.data?.detail || 'Failed to create user';
+      setFormError(typeof msg === 'string' ? msg : JSON.stringify(msg));
     }
   };
 
@@ -60,198 +90,185 @@ export const UserManagement: React.FC = () => {
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', textAlign: 'center' }}>Loading users...</div>;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
+        <div className="spinner" />
+      </div>
+    );
   }
 
   return (
-    <div style={{ 
-      padding: '40px 20px', 
-      maxWidth: '1200px', 
-      margin: '0 auto',
-      fontFamily: "'Space Grotesk', sans-serif" 
-    }}>
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '32px' 
-      }}>
+    <div className="page">
+      <div className="pg-head">
         <div>
-          <h1 style={{ 
-            fontSize: '1.75rem', 
-            fontWeight: 600, 
-            color: '#F5F4F1',
-            marginBottom: '8px' 
-          }}>
-            User Management
+          <div className="pg-crumb">
+            <UsersIcon /> <span>NextBelt Admin</span> <ChevronRightIcon /> <span className="crumb-cur">Users</span>
+          </div>
+          <h1 className="pg-title">
+            <em>User</em> Management
           </h1>
-          <p style={{ color: '#5F5E59', fontSize: '0.875rem' }}>
-            Manage user access and permissions
-          </p>
+          <div className="pg-sub">
+            <span>Manage user access and permissions</span>
+          </div>
         </div>
-        <Button onClick={() => setShowCreateModal(true)}>
-          + Create User
-        </Button>
+        <button className="btn primary lg" onClick={() => setShowCreateModal(true)}>
+          <PlusIcon /> Create User
+        </button>
       </div>
 
-      <div style={{ display: 'grid', gap: '16px' }}>
-        {users.map(user => (
-          <Card key={user.id}>
-            <div style={{ 
-              display: 'grid', 
-              gridTemplateColumns: '1fr 200px 150px 120px 100px',
-              gap: '16px',
-              alignItems: 'center' 
-            }}>
+      <section className="table-card">
+        <div className="table-head">
+          <div>
+            <h3>All users</h3>
+            <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 4 }}>
+              {users.length} {users.length === 1 ? 'user' : 'users'}
+            </div>
+          </div>
+        </div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1.6fr) 130px 130px 120px 110px',
+            gap: 14,
+            padding: '10px 22px',
+            borderBottom: '1px solid var(--line-2)',
+            color: 'var(--muted)',
+            fontSize: 10.5,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
+            fontWeight: 600,
+          }}
+        >
+          <span>Name & email</span>
+          <span>Role</span>
+          <span>Status</span>
+          <span>Created</span>
+          <span style={{ textAlign: 'right' }}>Action</span>
+        </div>
+
+        {users.map((user) => {
+          const role = ROLE_META[user.role] || { cls: 'muted', label: user.role };
+          return (
+            <div
+              key={user.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1.6fr) 130px 130px 120px 110px',
+                gap: 14,
+                padding: '14px 22px',
+                borderBottom: '1px solid var(--line-2)',
+                alignItems: 'center',
+              }}
+            >
               <div>
-                <div style={{ fontWeight: 600, marginBottom: '4px', color: '#F5F4F1' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ink)' }}>
                   {user.full_name}
                 </div>
-                <div style={{ fontSize: '0.875rem', color: '#8A8A86' }}>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3 }}>
                   {user.email}
                 </div>
               </div>
-              
               <div>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '4px',
-                  fontSize: '0.875rem',
-                  fontWeight: 500,
-                  background: user.role === 'admin' ? '#D4714F' : 
-                             user.role === 'auditor' ? '#1A8A8A' : '#5F5E59',
-                  color: 'white'
-                }}>
-                  {user.role}
-                </span>
+                <span className={`chip ${role.cls}`}>{role.label}</span>
               </div>
-
-              <div style={{ fontSize: '0.875rem', color: '#666' }}>
-                {new Date(user.created_at).toLocaleDateString()}
-              </div>
-
               <div>
-                <span style={{
-                  padding: '4px 12px',
-                  borderRadius: '4px',
-                  fontSize: '0.875rem',
-                  background: user.is_active ? '#22c55e' : '#ef4444',
-                  color: 'white'
-                }}>
+                <span className={`chip ${user.is_active ? 'ok' : 'danger'}`}>
+                  <span className="dot" />
                   {user.is_active ? 'Active' : 'Inactive'}
                 </span>
               </div>
-
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleToggleActive(user.id, user.is_active)}
-              >
-                {user.is_active ? 'Disable' : 'Enable'}
-              </Button>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {showCreateModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          background: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(8px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <Card style={{ width: '100%', maxWidth: '500px', padding: '32px' }}>
-            <h2 style={{ marginBottom: '24px', fontSize: '1.25rem', color: '#F5F4F1' }}>Create New User</h2>
-            
-            <form onSubmit={handleCreateUser}>
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Email
-                </label>
-                <Input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  placeholder="user@example.com"
-                  required
-                />
+              <div className="mono" style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                {new Date(user.created_at).toLocaleDateString()}
               </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Full Name
-                </label>
-                <Input
-                  type="text"
-                  value={formData.full_name}
-                  onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-                  placeholder="John Doe"
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Password
-                </label>
-                <Input
-                  type="password"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  placeholder="Minimum 8 characters"
-                  required
-                />
-              </div>
-
-              <div style={{ marginBottom: '24px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#8A8A86', fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Role
-                </label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '6px',
-                    fontSize: '0.875rem',
-                    fontFamily: "'Space Grotesk', sans-serif",
-                    background: '#0D1312',
-                    color: '#E8E6E1',
-                  }}
-                >
-                  <option value="auditor">Auditor</option>
-                  <option value="admin">Admin</option>
-                  <option value="client">Client</option>
-                </select>
-              </div>
-
-              <div style={{ display: 'flex', gap: '12px' }}>
-                <Button type="submit" fullWidth>
-                  Create User
-                </Button>
+              <div style={{ textAlign: 'right' }}>
                 <Button
-                  type="button"
                   variant="outline"
-                  fullWidth
-                  onClick={() => setShowCreateModal(false)}
+                  size="sm"
+                  onClick={() => handleToggleActive(user.id, user.is_active)}
                 >
-                  Cancel
+                  {user.is_active ? 'Disable' : 'Enable'}
                 </Button>
               </div>
-            </form>
-          </Card>
-        </div>
-      )}
+            </div>
+          );
+        })}
+      </section>
+
+      <Modal
+        isOpen={showCreateModal}
+        onClose={() => {
+          setShowCreateModal(false);
+          setFormError(null);
+        }}
+        title="Create New User"
+      >
+        <form onSubmit={handleCreateUser}>
+          {formError && (
+            <div
+              style={{
+                padding: '10px 14px',
+                borderRadius: 8,
+                background: 'rgba(194, 83, 60, 0.08)',
+                border: '1px solid rgba(194, 83, 60, 0.30)',
+                color: 'var(--danger)',
+                fontSize: 12.5,
+                marginBottom: 12,
+              }}
+            >
+              {formError}
+            </div>
+          )}
+          <Input
+            label="Email"
+            type="email"
+            value={formData.email}
+            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+            placeholder="user@example.com"
+            required
+          />
+          <Input
+            label="Full Name"
+            type="text"
+            value={formData.full_name}
+            onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+            placeholder="Jane Doe"
+            required
+          />
+          <Input
+            label="Password"
+            type="password"
+            value={formData.password}
+            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+            placeholder="Minimum 8 characters"
+            required
+          />
+
+          <div className="field">
+            <label className="field-label">Role</label>
+            <select
+              className="field-input"
+              value={formData.role}
+              onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+            >
+              <option value="auditor">Auditor</option>
+              <option value="admin">Admin</option>
+              <option value="client">Client</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 8 }}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowCreateModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit">Create User</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 };

@@ -1,9 +1,6 @@
 /**
- * Shared API client.
- *
- * Only auth, current-user, user-management, and the four v1 routes the UI
- * still hits (finalize, generate-report, report download, CMMS upload) live
- * here. Everything else is in clientV2.ts (`/api/v2/*`).
+ * Shared API client: axios instance + offline queue + auth/user-management.
+ * Assessment, scoring, report, and CMMS calls live in clientV2.ts.
  */
 import axios from 'axios';
 
@@ -156,34 +153,5 @@ export const userAPI = {
     (await api.patch(`/users/${id}`, updates)).data,
 };
 
-// ────────────────────────────────────────────────────────────────
-// Assessment finalize + report download (shared between v1 + v2 ids;
-// backend routes them by table lookup).
-// ────────────────────────────────────────────────────────────────
-
-export const assessmentAPI = {
-  finalize: async (id: number) => (await api.post(`/assessments/${id}/finalize`)).data,
-
-  generateReport: async (id: number) =>
-    (await api.post(`/assessments/${id}/generate-report`)).data,
-
-  downloadReport: async (id: number) => {
-    const r = await api.get(`/assessments/${id}/report/download`, { responseType: 'blob' });
-    return r.data;
-  },
-};
-
-// ────────────────────────────────────────────────────────────────
-// CMMS upload (multipart, validated server-side)
-// ────────────────────────────────────────────────────────────────
-
-export const cmmsAPI = {
-  upload: async (assessmentId: number, file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    const r = await api.post(`/assessments/${assessmentId}/analyze-work-orders`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-    return r.data;
-  },
-};
+// Assessment finalize, report generate/download, and CMMS upload all live in
+// clientV2.ts (v2 is the only product surface).

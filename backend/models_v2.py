@@ -196,9 +196,14 @@ class AssessmentV2(Base):
 
     # Site metadata
     client_name = Column(String(255), nullable=False, index=True)
-    site_name = Column(String(255), nullable=False)
+    site_name = Column(String(255), nullable=False, index=True)
     industry = Column(String(100))
     site_criticality = Column(Float, default=1.0)
+
+    # Peer-segmentation metadata (drives benchmarking buckets + report header)
+    employee_count = Column(Integer, nullable=True)
+    region = Column(String(60), nullable=True)
+    lead_assessor = Column(String(120), nullable=True)
 
     # vNext fields
     assessment_mode = Column(Enum(AssessmentMode), nullable=False, default=AssessmentMode.STANDARD)
@@ -207,7 +212,7 @@ class AssessmentV2(Base):
 
     # Lifecycle
     status = Column(String(20), default="DRAFT")
-    assessment_date = Column(DateTime, nullable=False)
+    assessment_date = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
@@ -236,8 +241,8 @@ class ResponseV2(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False)
-    question_id = Column(Integer, ForeignKey("question_bank_v2.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("question_bank_v2.id"), nullable=False, index=True)
     respondent_role = Column(Enum(TargetRoleV2), nullable=True)
 
     # Response data
@@ -251,6 +256,19 @@ class ResponseV2(Base):
     )
     evidence_notes = Column(Text, nullable=True)
     evidence_grade = Column(String(1), nullable=True)  # A, B, C, D
+
+    # Evidence file (uploaded by user; serialized StoredObject path)
+    evidence_file_path = Column(String(500), nullable=True)
+    evidence_filename = Column(String(255), nullable=True)
+    evidence_mime = Column(String(120), nullable=True)
+    evidence_size_bytes = Column(Integer, nullable=True)
+    evidence_uploaded_at = Column(DateTime, nullable=True)
+
+    # AI analysis of the uploaded evidence
+    ai_suggested_score = Column(Float, nullable=True)
+    ai_observations = Column(Text, nullable=True)
+    ai_confidence = Column(String(10), nullable=True)  # HIGH / MEDIUM / LOW
+    ai_analyzed_at = Column(DateTime, nullable=True)
 
     # Flags
     is_draft = Column(Boolean, default=False)
@@ -276,7 +294,7 @@ class SubdomainScore(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False, index=True)
     subdomain_id = Column(Integer, ForeignKey("subdomains.id"), nullable=False)
 
     raw_score = Column(Float, nullable=True)
@@ -320,6 +338,7 @@ class BenchmarkMetadata(Base):
     overall_percentile = Column(Integer, nullable=True)
     peer_count = Column(Integer, nullable=True)
     domain_percentiles = Column(JSON, nullable=True)
+    peer_group_criteria = Column(JSON, nullable=True)  # how the peer set was selected
     calculated_at = Column(DateTime, nullable=True)
 
     assessment = relationship("AssessmentV2", back_populates="benchmark")
@@ -382,3 +401,39 @@ class CalibrationExercise(Base):
     completed_at = Column(DateTime, default=datetime.utcnow)
 
     auditor = relationship("User")
+
+
+class CMSSUploadKind(str, enum.Enum):
+    """CMMS snapshot kinds the analyzer understands."""
+    WORK_ORDERS = "work_orders"
+    PM = "pm"
+
+
+class CMMSUploadV2(Base):
+    """
+    A CMMS data snapshot attached to a vNext assessment.
+
+    The analyzer in data_analysis_module.py parses the file, computes reactive
+    ratio / PM compliance / data-graveyard metrics, and stores them in
+    `metrics` JSON. Scoring engine reads these to boost or cap relevant
+    subdomains (AI.1, WM.2).
+    """
+    __tablename__ = "cmms_uploads_v2"
+
+    id = Column(Integer, primary_key=True, index=True)
+    assessment_id = Column(Integer, ForeignKey("assessments_v2.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    kind = Column(String(20), nullable=False)  # work_orders | pm
+    file_path = Column(String(500), nullable=False)
+    original_filename = Column(String(255), nullable=True)
+    file_size_bytes = Column(Integer, nullable=True)
+
+    status = Column(String(20), nullable=False, default="processed")  # processed | error
+    error_message = Column(Text, nullable=True)
+
+    metrics = Column(JSON, nullable=True)
+    bad_actors = Column(JSON, nullable=True)
+    record_count = Column(Integer, nullable=True)
+
+    uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    uploaded_at = Column(DateTime, default=datetime.utcnow, nullable=False)

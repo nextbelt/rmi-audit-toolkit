@@ -201,3 +201,13 @@ def verify_password_reset_token(token: str) -> int:
         return int(user_id_s)
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+
+def hash_reset_token(token: str) -> str:
+    """Stable hash of a reset token, for single-use replay tracking.
+
+    Stored in password_reset_used so a leaked token cannot be replayed within
+    its TTL. Uses the reset secret so the stored hash isn't a plain digest of
+    the (otherwise signed) token.
+    """
+    return hmac.new(_reset_secret(), token.encode("utf-8"), hashlib.sha256).hexdigest()

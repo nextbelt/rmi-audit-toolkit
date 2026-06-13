@@ -40,7 +40,7 @@ def test_forward_migration_creates_all_tables(tmp_path):
     missing = expected - actual
 
     assert not missing, f"Tables missing after create_all: {sorted(missing)}"
-    assert len(actual) >= 20, f"Expected >= 20 tables, found only {len(actual)}: {sorted(actual)}"
+    assert len(actual) >= 14, f"Expected >= 14 tables, found only {len(actual)}: {sorted(actual)}"
 
 
 def test_rollback_and_recreate_is_idempotent(tmp_path):
@@ -62,6 +62,6 @@ def test_rollback_and_recreate_is_idempotent(tmp_path):
     missing = expected - actual
 
     assert not missing, f"Tables missing after drop/recreate: {sorted(missing)}"
-    assert len(actual) >= 20, (
+    assert len(actual) >= 14, (
         f"Drop + recreate produced only {len(actual)} tables: {sorted(actual)}"
     )

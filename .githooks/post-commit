@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# Keep the local code-review-graph fresh after every commit.
+# Enable once with:  git config core.hooksPath .githooks
+#
+# No-op (and never blocks the commit) if the tool isn't installed.
+set -e
+
+if command -v code-review-graph >/dev/null 2>&1; then
+  # Incremental update is fast (<2s on large repos); run detached so the
+  # commit returns immediately.
+  ( code-review-graph update >/dev/null 2>&1 & ) || true
+fi

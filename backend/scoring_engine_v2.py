@@ -12,7 +12,8 @@ import json
 from models_v2 import (
     AssessmentV2, ResponseV2, QuestionV2, SubdomainScore,
     Subdomain, Domain, DomainType, SubdomainType,
-    AssessmentMode, EvidenceStatus, TargetRoleV2
+    AssessmentMode, EvidenceStatus, TargetRoleV2,
+    CMMSUploadV2,
 )
 
 
@@ -33,13 +34,15 @@ class ScoringEngineV2:
         "RELIABILITY_ENGINEER": 0.15,
     }
 
-    # ── Maturity level boundaries (equal-width top bands) ──
+    # ── Maturity level boundaries ──
+    # Contiguous half-open bands [low, high): every value in [1.0, 5.0] maps to
+    # exactly one level. The top band is closed at 5.0. See SCORING_POLICY.md §2.
     MATURITY_LEVELS = [
-        (1.00, 1.99, 1, "Reactive"),
-        (2.00, 2.99, 2, "Emerging"),
-        (3.00, 3.59, 3, "Systematic"),
-        (3.60, 4.29, 4, "Proactive"),
-        (4.30, 5.00, 5, "Prescriptive"),
+        (1.00, 2.00, 1, "Reactive"),
+        (2.00, 3.00, 2, "Emerging"),
+        (3.00, 3.60, 3, "Systematic"),
+        (3.60, 4.30, 4, "Proactive"),
+        (4.30, 5.01, 5, "Prescriptive"),  # high is exclusive; 5.01 includes 5.00
     ]
 
     # ── Default domain weights (equal) ──
@@ -90,8 +93,13 @@ class ScoringEngineV2:
     #  PUBLIC API
     # ═══════════════════════════════════════════
 
-    def calculate(self, assessment_id: int) -> Dict:
-        """Full scoring pipeline for a vNext assessment."""
+    def calculate(self, assessment_id: int, persist: bool = True) -> Dict:
+        """Full scoring pipeline for a vNext assessment.
+
+        persist=False computes the full result (scores, caps, blind spots,
+        velocity, confidence band) WITHOUT writing to the DB — used by report
+        generation so producing a report never mutates official scores.
+        """
         assessment = self.db.query(AssessmentV2).filter(
             AssessmentV2.id == assessment_id
         ).first()
@@ -120,6 +128,9 @@ class ScoringEngineV2:
         # ── Step 2: Apply critical-failure caps (question-level) ──
         caps_applied += self._apply_critical_caps(assessment_id, subdomain_results)
 
+        # ── Step 2.5: Apply CMMS-evidence caps ──
+        caps_applied += self._apply_cmms_evidence_caps(assessment_id, subdomain_results)
+
         # ── Step 3: Aggregate to domain scores ──
         domain_results: Dict[str, Dict] = {}
         domains = self.db.query(Domain).order_by(Domain.display_order).all()
@@ -129,7 +140,7 @@ class ScoringEngineV2:
                          if subdomain_results[c]["final_score"] is not None]
             domain_score = mean(sd_scores) if sd_scores else None
             domain_results[dom.code] = {
-                "score": round(domain_score, 2) if domain_score else None,
+                "score": round(domain_score, 2) if domain_score is not None else None,
                 "subdomains": {c: subdomain_results[c] for c in sd_codes},
             }
 
@@ -152,16 +163,16 @@ class ScoringEngineV2:
         for cap in caps_applied:
             if cap.get("target") == "__overall__":
                 overall_cap = cap["cap"]
-        if overall_cap and overall_rmi and overall_rmi > overall_cap:
+        if overall_cap is not None and overall_rmi is not None and overall_rmi > overall_cap:
             overall_rmi = overall_cap
 
-        overall_rmi = round(overall_rmi, 2) if overall_rmi else None
+        overall_rmi = round(overall_rmi, 2) if overall_rmi is not None else None
 
         # ── Step 6: Confidence ──
         confidence = self._calculate_confidence(assessment_id, assessment.assessment_mode, blind_spots)
 
         # ── Step 7: Maturity level ──
-        maturity = self._get_maturity_level(overall_rmi) if overall_rmi else None
+        maturity = self._get_maturity_level(overall_rmi) if overall_rmi is not None else None
 
         # ── Step 8: Velocity ──
         velocity = self._calculate_velocity(assessment)
@@ -169,18 +180,21 @@ class ScoringEngineV2:
         # ── Step 9: ISO 55001 readiness ──
         iso_readiness = self._iso_readiness(subdomain_results)
 
-        # ── Step 10: Persist ──
-        self._persist_scores(assessment, subdomain_results, domain_results,
-                             overall_rmi, confidence, maturity)
+        # ── Step 10: Persist (skipped for read-only report generation) ──
+        if persist:
+            self._persist_scores(assessment, subdomain_results, domain_results,
+                                 overall_rmi, confidence, maturity)
 
         return {
             "assessment_id": assessment_id,
             "overall_rmi": overall_rmi,
             "maturity_level": maturity,
-            "confidence": round(confidence, 2) if confidence else None,
+            "confidence": round(confidence, 2) if confidence is not None else None,
             "confidence_band": [
-                round(overall_rmi - (1 - confidence) * 1.0, 2) if overall_rmi and confidence else None,
-                round(overall_rmi + (1 - confidence) * 1.0, 2) if overall_rmi and confidence else None,
+                round(max(1.0, overall_rmi - (1 - confidence) * 1.0), 2)
+                if overall_rmi is not None and confidence is not None else None,
+                round(min(5.0, overall_rmi + (1 - confidence) * 1.0), 2)
+                if overall_rmi is not None and confidence is not None else None,
             ],
             "domains": domain_results,
             "caps_applied": caps_applied,
@@ -212,11 +226,13 @@ class ScoringEngineV2:
 
         if not responses:
             return {"raw_score": None, "final_score": None, "response_count": 0,
-                    "evidence_blocked": 0, "cap_applied": False, "cap_reason": None}
+                    "evidence_blocked": 0, "evidence_blocked_questions": [],
+                    "cap_applied": False, "cap_reason": None}
 
         total_weighted = 0.0
         total_weight = 0.0
         evidence_blocked = 0
+        evidence_blocked_questions: List[Dict] = []
 
         for resp, question in responses:
             if resp.numeric_score is None:
@@ -229,6 +245,7 @@ class ScoringEngineV2:
             # not yet verified) and REJECTED both fall back to the cap so
             # claims do not lift maturity without a verified audit trail.
             effective_score = float(resp.numeric_score)
+            claimed = effective_score
             if (
                 question.evidence_required
                 and effective_score >= self.EVIDENCE_REQUIRED_FOR_SCORE_AT_OR_ABOVE
@@ -236,10 +253,18 @@ class ScoringEngineV2:
             ):
                 evidence_blocked += 1
                 effective_score = min(effective_score, self.EVIDENCE_CAP_WITHOUT_ACCEPTED)
+                evidence_blocked_questions.append({
+                    "question_id": question.id,
+                    "code": question.question_code,
+                    "claimed": claimed,
+                    "capped_to": effective_score,
+                    "evidence_status": (
+                        resp.evidence_status.value if resp.evidence_status else None
+                    ),
+                })
 
-            role_w = self.ROLE_WEIGHTS.get(
-                resp.respondent_role.value if resp.respondent_role else "TECHNICIAN", 0.20
-            )
+            role_key = resp.respondent_role.value if resp.respondent_role else ""
+            role_w = self.ROLE_WEIGHTS.get(role_key, 0.20)  # unroled/unknown → neutral 0.20
             q_w = question.weight or 1.0
             combined = role_w * q_w
 
@@ -254,10 +279,11 @@ class ScoringEngineV2:
         raw = total_weighted / total_weight if total_weight > 0 else None
 
         return {
-            "raw_score": round(raw, 2) if raw else None,
-            "final_score": round(raw, 2) if raw else None,  # caps applied later
+            "raw_score": round(raw, 2) if raw is not None else None,
+            "final_score": round(raw, 2) if raw is not None else None,  # caps applied later
             "response_count": len(responses),
             "evidence_blocked": evidence_blocked,
+            "evidence_blocked_questions": evidence_blocked_questions,
             "cap_applied": False,
             "cap_reason": None,
         }
@@ -309,6 +335,111 @@ class ScoringEngineV2:
                     "trigger_score": resp.numeric_score,
                 })
         return caps
+
+    # ═══════════════════════════════════════════
+    #  CMMS DATA EVIDENCE CAPS
+    # ═══════════════════════════════════════════
+
+    # Without a CMMS data snapshot, AI.1 (CMMS/EAM Effectiveness) and AI.2
+    # (Data Quality & Integrity) cannot be claimed above "Emerging". The site
+    # may *say* the CMMS is mature, but no auditable export = no evidence.
+    CMMS_REQUIRED_FOR_SUBDOMAINS = {
+        "AI.1": {
+            "needs": "work_orders",
+            "cap_without_snapshot": 2.0,
+            "label": "No CMMS work-order export — cannot verify CMMS effectiveness",
+        },
+        "AI.2": {
+            "needs": "work_orders",
+            "cap_without_snapshot": 2.5,
+            "label": "No CMMS data export — data quality unverified",
+        },
+        "WM.2": {
+            "needs": "pm",
+            "cap_without_snapshot": 3.0,
+            "label": "No PM compliance export — PM/PdM maturity unverified",
+        },
+    }
+
+    def _apply_cmms_evidence_caps(self, assessment_id: int,
+                                  sd_results: Dict[str, Dict]) -> List[Dict]:
+        """Cap subdomains that require a CMMS snapshot but didn't get one."""
+        uploads = (
+            self.db.query(CMMSUploadV2)
+            .filter(
+                CMMSUploadV2.assessment_id == assessment_id,
+                CMMSUploadV2.status == "processed",
+            )
+            .all()
+        )
+        kinds_present = {u.kind for u in uploads}
+
+        caps = []
+        for sd_code, rule in self.CMMS_REQUIRED_FOR_SUBDOMAINS.items():
+            sd_data = sd_results.get(sd_code)
+            if not sd_data or sd_data.get("final_score") is None:
+                continue
+
+            if rule["needs"] in kinds_present:
+                continue  # snapshot exists; let claim stand
+
+            cap = rule["cap_without_snapshot"]
+            if sd_data["final_score"] > cap:
+                sd_data["final_score"] = cap
+                sd_data["cap_applied"] = True
+                sd_data["cap_reason"] = rule["label"]
+                caps.append({
+                    "subdomain": sd_code,
+                    "cap": cap,
+                    "label": rule["label"],
+                    "source": "cmms_evidence_missing",
+                })
+
+        # When snapshots exist, soft-floor with the metric: poor data quality
+        # / reactive ratio caps the AI.* claim even if the auditor scored it
+        # high.
+        for upload in uploads:
+            metrics = upload.metrics or {}
+            if upload.kind == "work_orders":
+                # data_quality.score (1-5) caps AI.2 directly
+                dq = (metrics.get("data_quality") or {}).get("score")
+                if isinstance(dq, (int, float)):
+                    self._cap_subdomain(sd_results, "AI.2", float(dq) + 0.5,
+                                        f"CMMS data quality score = {dq:.1f}", caps,
+                                        source="cmms_data_quality")
+                # Reactive ratio (fraction 0-1) inversely caps WM.1: a site that
+                # runs >50% reactive cannot claim mature planning & scheduling.
+                rr = (metrics.get("reactive_ratio") or {}).get("reactive_ratio")
+                if isinstance(rr, (int, float)) and rr > 0.5:
+                    self._cap_subdomain(sd_results, "WM.1", 3.0,
+                                        f"Reactive ratio {rr:.0%} — planning maturity capped",
+                                        caps, source="cmms_reactive_ratio")
+            elif upload.kind == "pm":
+                # compliance_rate is a fraction 0-1 (see cmms_metrics.py).
+                pmc = metrics.get("pm_compliance_rate")
+                if pmc is None:
+                    pmc = metrics.get("compliance_rate")
+                if isinstance(pmc, (int, float)):
+                    # 0.95 -> 4.8 (no cap); 0.60 -> 3.4; 0.50 -> 3.0
+                    pmc_frac = min(max(pmc, 0.0), 1.0)
+                    derived = 1.0 + pmc_frac * 4.0
+                    self._cap_subdomain(sd_results, "WM.2", derived + 0.3,
+                                        f"PM compliance {pmc_frac:.0%}", caps,
+                                        source="cmms_pm_compliance")
+
+        return caps
+
+    @staticmethod
+    def _cap_subdomain(sd_results: Dict[str, Dict], sd_code: str, cap: float,
+                       label: str, caps: List[Dict], source: str) -> None:
+        sd = sd_results.get(sd_code)
+        if not sd or sd.get("final_score") is None:
+            return
+        if sd["final_score"] > cap:
+            sd["final_score"] = round(cap, 2)
+            sd["cap_applied"] = True
+            sd["cap_reason"] = label
+            caps.append({"subdomain": sd_code, "cap": round(cap, 2), "label": label, "source": source})
 
     def _apply_cross_domain_caps(self, domain_results: Dict[str, Dict]) -> List[Dict]:
         """Apply cross-domain cap rules."""
@@ -410,10 +541,13 @@ class ScoringEngineV2:
     # ═══════════════════════════════════════════
 
     def _get_maturity_level(self, score: float) -> str:
+        if score is None:
+            return "Level 1 - Reactive"
+        clamped = max(1.0, min(5.0, score))
         for low, high, level_num, name in self.MATURITY_LEVELS:
-            if low <= score <= high:
+            if low <= clamped < high:
                 return f"Level {level_num} - {name}"
-        return "Level 1 - Reactive"
+        return "Level 5 - Prescriptive"
 
     # ═══════════════════════════════════════════
     #  VELOCITY

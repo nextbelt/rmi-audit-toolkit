@@ -5,7 +5,7 @@ Extracted from main.py to avoid circular imports with api_v2.py.
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
-from jose import JWTError, jwt
+import jwt  # PyJWT
 
 from database import get_db
 from models import User
@@ -26,10 +26,10 @@ async def get_current_user(
 
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        email: str = payload.get("sub")
+        email = payload.get("sub")
         if email is None:
             raise credentials_exception
-    except JWTError:
+    except jwt.PyJWTError:
         raise credentials_exception
 
     user = db.query(User).filter(User.email == email).first()

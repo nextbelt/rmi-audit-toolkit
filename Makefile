@@ -23,10 +23,6 @@ DC := docker compose
 # ── Lifecycle ────────────────────────────────────────────────────────────────
 
 up:           ## Start backend + frontend (build images if missing)
-	@if [ ! -f .env ]; then \
-	  echo "⚠  .env not found — copying .env.example. Edit it before running in production."; \
-	  cp .env.example .env; \
-	fi
 	$(DC) up --build -d
 	@echo ""
 	@echo "  Backend  → http://localhost:8000"
