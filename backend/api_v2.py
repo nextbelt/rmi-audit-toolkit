@@ -13,6 +13,7 @@ import json
 from fastapi import (
     APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -166,6 +167,9 @@ def create_assessment(data: AssessmentCreate, db: Session = Depends(get_db), cur
         assessment_mode=mode,
         industry_module=industry,
         assessment_date=assess_date,
+        region=(data.region or None),
+        employee_count=data.employee_count,
+        lead_assessor=(data.lead_assessor or None),
         status="in_progress",
         creator_id=current_user.id,
     )
@@ -242,15 +246,21 @@ def get_questions(
         except ValueError:
             pass
     try:
-        questions = engine.get_questions(assessment_id, role_filter)
-        # Always compute role counts from the full (unfiltered) question set
+        # role_counts is always derived from the full (unfiltered) set. When no
+        # role filter is requested (the common "ALL" path) we reuse that set and
+        # skip a second routing pass. Role-specific routing is NOT a plain subset
+        # of the full set (critical questions + min-fill), so it must go through
+        # the engine when a role is requested.
         all_questions = engine.get_questions(assessment_id, None)
-        role_counts: dict = {}
-        for q in all_questions:
-            r = q.get("target_role") or "UNKNOWN"
-            role_counts[r] = role_counts.get(r, 0) + 1
+        questions = all_questions if role_filter is None else engine.get_questions(assessment_id, role_filter)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+    role_counts: dict = {}
+    for q in all_questions:
+        r = q.get("target_role") or "UNKNOWN"
+        role_counts[r] = role_counts.get(r, 0) + 1
+
     return {
         "questions": questions,
         "total": len(questions),
@@ -332,28 +342,16 @@ def get_responses(assessment_id: int, db: Session = Depends(get_db), current_use
     ]
 
 
-@router.post("/assessments/{assessment_id}/responses")
-def submit_response(
-    assessment_id: int,
-    data: QuestionResponseCreate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Submit a single question response."""
-    assessment = get_v2_assessment_or_403(db, assessment_id, current_user)
-    if getattr(assessment, "finalized_at", None) is not None:
-        raise HTTPException(
-            status_code=403,
-            detail="Assessment is finalized; responses cannot be modified.",
-        )
+def _upsert_response(db: Session, assessment_id: int, data: QuestionResponseCreate) -> ResponseV2:
+    """Upsert a single response WITHOUT committing.
 
-    question = db.query(QuestionV2).filter(
-        QuestionV2.id == data.question_id
-    ).first()
+    Shared by the single and bulk endpoints so a batch is one transaction.
+    Raises HTTPException(404) if the question is unknown.
+    """
+    question = db.query(QuestionV2).filter(QuestionV2.id == data.question_id).first()
     if not question:
         raise HTTPException(404, "Question not found")
 
-    # Upsert: check for existing response
     role_enum = None
     if data.respondent_role:
         try:
@@ -361,7 +359,6 @@ def submit_response(
         except ValueError:
             pass
 
-    # Parse the explicit status the client sent (if any)
     explicit_status: Optional[EvidenceStatus] = None
     if data.evidence_status:
         try:
@@ -387,13 +384,10 @@ def submit_response(
     prior_status = existing.evidence_status if existing else None
 
     if explicit_status is not None and explicit_status != EvidenceStatus.NOT_REQUIRED:
-        # Caller is explicitly setting a non-default status (e.g. lead-auditor
-        # toggling to ACCEPTED). Honor it.
         evidence_enum = explicit_status
     elif not question.evidence_required:
         evidence_enum = EvidenceStatus.NOT_REQUIRED
     elif has_evidence_file:
-        # Don't down-rank an already-ACCEPTED record on a routine score save
         evidence_enum = (
             prior_status
             if prior_status in (EvidenceStatus.ACCEPTED, EvidenceStatus.PENDING_VERIFICATION)
@@ -411,22 +405,40 @@ def submit_response(
         existing.evidence_grade = data.evidence_grade
         existing.evidence_notes = data.notes
         existing.answered_at = datetime.utcnow()
-        response = existing
-    else:
-        response = ResponseV2(
-            assessment_id=assessment_id,
-            question_id=data.question_id,
-            numeric_score=data.numeric_score,
-            response_value=data.text_response or (str(data.numeric_score) if data.numeric_score else None),
-            respondent_role=role_enum,
-            is_na=data.is_na,
-            is_draft=data.is_draft,
-            evidence_status=evidence_enum,
-            evidence_grade=data.evidence_grade,
-            evidence_notes=data.notes,
-        )
-        db.add(response)
+        return existing
 
+    response = ResponseV2(
+        assessment_id=assessment_id,
+        question_id=data.question_id,
+        numeric_score=data.numeric_score,
+        response_value=data.text_response or (str(data.numeric_score) if data.numeric_score else None),
+        respondent_role=role_enum,
+        is_na=data.is_na,
+        is_draft=data.is_draft,
+        evidence_status=evidence_enum,
+        evidence_grade=data.evidence_grade,
+        evidence_notes=data.notes,
+    )
+    db.add(response)
+    return response
+
+
+@router.post("/assessments/{assessment_id}/responses")
+def submit_response(
+    assessment_id: int,
+    data: QuestionResponseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Submit a single question response."""
+    assessment = get_v2_assessment_or_403(db, assessment_id, current_user)
+    if getattr(assessment, "finalized_at", None) is not None:
+        raise HTTPException(
+            status_code=403,
+            detail="Assessment is finalized; responses cannot be modified.",
+        )
+
+    response = _upsert_response(db, assessment_id, data)
     db.commit()
     db.refresh(response)
 
@@ -446,15 +458,20 @@ def submit_responses_bulk(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Submit multiple responses at once."""
-    get_v2_assessment_or_403(db, assessment_id, current_user)
+    """Submit multiple responses at once — one transaction for the whole batch."""
+    assessment = get_v2_assessment_or_403(db, assessment_id, current_user)
+    if getattr(assessment, "finalized_at", None) is not None:
+        raise HTTPException(403, "Assessment is finalized; responses cannot be modified.")
+
     results = []
     for resp in data.responses:
         try:
-            result = submit_response(assessment_id, resp, db, current_user)
+            _upsert_response(db, assessment_id, resp)
             results.append({"question_id": resp.question_id, "status": "ok"})
         except HTTPException as e:
             results.append({"question_id": resp.question_id, "status": "error", "detail": e.detail})
+
+    db.commit()
     return {"submitted": len(results), "results": results}
 
 
@@ -877,6 +894,26 @@ def analyze_evidence(
 #  CMMS Snapshot Upload
 # ═══════════════════════════════════════════
 
+def _analyze_cmms_file(kind: str, local_path: str) -> dict:
+    """CPU-bound CMMS parse + metrics. Runs in a threadpool (no DB access)."""
+    from data_analysis_module import CMMSDataAnalyzer
+
+    analyzer = CMMSDataAnalyzer(db=None)  # the methods used here don't touch the DB
+    if kind == "work_orders":
+        df = analyzer.import_work_orders(local_path)
+        metrics = analyzer.analyze_work_orders(0, 0, local_path)
+        try:
+            ba = analyzer.detect_bad_actors(df, top_n=10).to_dict()
+            bad_actors = list(ba.get("failure_count", {}).items()) if isinstance(ba, dict) else []
+        except Exception:
+            bad_actors = []  # bad-actor detection needs an asset column; optional
+        return {"metrics": metrics, "bad_actors": bad_actors, "record_count": int(len(df))}
+
+    df = analyzer.import_pm_data(local_path)
+    metrics = analyzer.analyze_pm_compliance(0, 0, local_path)
+    return {"metrics": metrics, "bad_actors": None, "record_count": int(len(df))}
+
+
 @router.post("/assessments/{assessment_id}/cmms-uploads")
 async def upload_cmms_snapshot(
     assessment_id: int,
@@ -914,41 +951,15 @@ async def upload_cmms_snapshot(
     db.commit()
     db.refresh(upload)
 
-    # Materialize the file to a local path for pandas
+    # Materialize the file to a local path for pandas, then run the CPU-bound
+    # parse/metrics in a threadpool so the async event loop isn't blocked.
     local_path, is_temp = materialize_local(stored)
     try:
-        from data_analysis_module import CMMSDataAnalyzer
-        analyzer = CMMSDataAnalyzer(db)
-
-        if kind == "work_orders":
-            df = analyzer.import_work_orders(local_path)
-            metrics = analyzer.analyze_work_orders(
-                assessment_id=assessment_id,
-                analyzer_id=int(current_user.id),
-                file_path=local_path,
-                save_to_db=False,
-            )
-            # Best-effort bad-actor detection
-            try:
-                bad_actors = analyzer.detect_bad_actors(df, top_n=10).to_dict()
-                upload.bad_actors = (
-                    list(bad_actors.get("failure_count", {}).items())
-                    if isinstance(bad_actors, dict) else []
-                )
-            except Exception:
-                upload.bad_actors = []
-            upload.record_count = int(len(df))
-        else:  # pm
-            df = analyzer.import_pm_data(local_path)
-            metrics = analyzer.analyze_pm_compliance(
-                assessment_id=assessment_id,
-                analyzer_id=int(current_user.id),
-                file_path=local_path,
-                save_to_db=False,
-            )
-            upload.record_count = int(len(df))
-
-        upload.metrics = metrics
+        analysis = await run_in_threadpool(_analyze_cmms_file, kind, local_path)
+        upload.metrics = analysis["metrics"]
+        if analysis["bad_actors"] is not None:
+            upload.bad_actors = analysis["bad_actors"]
+        upload.record_count = analysis["record_count"]
         upload.status = "processed"
     except Exception as exc:
         logger.exception("CMMS analysis failed")
@@ -1056,4 +1067,7 @@ def _format_assessment(a: AssessmentV2) -> dict:
         "confidence_score": a.confidence_score,
         "assessment_date": a.assessment_date.isoformat() if a.assessment_date else None,
         "status": a.status or "in_progress",
+        "region": a.region,
+        "employee_count": a.employee_count,
+        "lead_assessor": a.lead_assessor,
     }

@@ -23,13 +23,16 @@ Industry modules override these (see `INDUSTRY_WEIGHTS` in `scoring_engine_v2.py
 
 ## 2. Score scale
 
+Bands are contiguous half-open intervals `[low, high)` so every score in
+`[1.00, 5.00]` maps to exactly one level (the top band is closed at 5.00).
+
 | Range | Level | Label |
 |---|---|---|
-| 1.00–1.99 | 1 | Reactive |
-| 2.00–2.99 | 2 | Emerging |
-| 3.00–3.59 | 3 | Systematic |
-| 3.60–4.29 | 4 | Proactive |
-| 4.30–5.00 | 5 | Prescriptive |
+| 1.00 ≤ s < 2.00 | 1 | Reactive |
+| 2.00 ≤ s < 3.00 | 2 | Emerging |
+| 3.00 ≤ s < 3.60 | 3 | Systematic |
+| 3.60 ≤ s < 4.30 | 4 | Proactive |
+| 4.30 ≤ s ≤ 5.00 | 5 | Prescriptive |
 
 ## 3. Role weighting
 
@@ -65,7 +68,8 @@ Low scores (< 4) are unaffected by the evidence cap.
 
 ### Evidence grade multiplier
 
-If an `evidence_grade` (A–D) is set, the score is multiplied:
+If an `evidence_grade` (A–D) is set, the response's score is multiplied by a
+confidence factor before it is weighted into the subdomain mean:
 
 | Grade | Multiplier |
 |---|---|
@@ -73,6 +77,9 @@ If an `evidence_grade` (A–D) is set, the score is multiplied:
 | B | 0.95 |
 | C | 0.85 |
 | D | 0.75 |
+
+This is a deliberate confidence discount (weaker evidence contributes a slightly
+lower effective score) and stacks with the evidence-status cap above.
 
 ## 5. Weakest-link caps
 

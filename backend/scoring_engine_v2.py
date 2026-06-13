@@ -34,13 +34,15 @@ class ScoringEngineV2:
         "RELIABILITY_ENGINEER": 0.15,
     }
 
-    # ── Maturity level boundaries (equal-width top bands) ──
+    # ── Maturity level boundaries ──
+    # Contiguous half-open bands [low, high): every value in [1.0, 5.0] maps to
+    # exactly one level. The top band is closed at 5.0. See SCORING_POLICY.md §2.
     MATURITY_LEVELS = [
-        (1.00, 1.99, 1, "Reactive"),
-        (2.00, 2.99, 2, "Emerging"),
-        (3.00, 3.59, 3, "Systematic"),
-        (3.60, 4.29, 4, "Proactive"),
-        (4.30, 5.00, 5, "Prescriptive"),
+        (1.00, 2.00, 1, "Reactive"),
+        (2.00, 3.00, 2, "Emerging"),
+        (3.00, 3.60, 3, "Systematic"),
+        (3.60, 4.30, 4, "Proactive"),
+        (4.30, 5.01, 5, "Prescriptive"),  # high is exclusive; 5.01 includes 5.00
     ]
 
     # ── Default domain weights (equal) ──
@@ -133,7 +135,7 @@ class ScoringEngineV2:
                          if subdomain_results[c]["final_score"] is not None]
             domain_score = mean(sd_scores) if sd_scores else None
             domain_results[dom.code] = {
-                "score": round(domain_score, 2) if domain_score else None,
+                "score": round(domain_score, 2) if domain_score is not None else None,
                 "subdomains": {c: subdomain_results[c] for c in sd_codes},
             }
 
@@ -156,16 +158,16 @@ class ScoringEngineV2:
         for cap in caps_applied:
             if cap.get("target") == "__overall__":
                 overall_cap = cap["cap"]
-        if overall_cap and overall_rmi and overall_rmi > overall_cap:
+        if overall_cap is not None and overall_rmi is not None and overall_rmi > overall_cap:
             overall_rmi = overall_cap
 
-        overall_rmi = round(overall_rmi, 2) if overall_rmi else None
+        overall_rmi = round(overall_rmi, 2) if overall_rmi is not None else None
 
         # ── Step 6: Confidence ──
         confidence = self._calculate_confidence(assessment_id, assessment.assessment_mode, blind_spots)
 
         # ── Step 7: Maturity level ──
-        maturity = self._get_maturity_level(overall_rmi) if overall_rmi else None
+        maturity = self._get_maturity_level(overall_rmi) if overall_rmi is not None else None
 
         # ── Step 8: Velocity ──
         velocity = self._calculate_velocity(assessment)
@@ -181,10 +183,12 @@ class ScoringEngineV2:
             "assessment_id": assessment_id,
             "overall_rmi": overall_rmi,
             "maturity_level": maturity,
-            "confidence": round(confidence, 2) if confidence else None,
+            "confidence": round(confidence, 2) if confidence is not None else None,
             "confidence_band": [
-                round(overall_rmi - (1 - confidence) * 1.0, 2) if overall_rmi and confidence else None,
-                round(overall_rmi + (1 - confidence) * 1.0, 2) if overall_rmi and confidence else None,
+                round(max(1.0, overall_rmi - (1 - confidence) * 1.0), 2)
+                if overall_rmi is not None and confidence is not None else None,
+                round(min(5.0, overall_rmi + (1 - confidence) * 1.0), 2)
+                if overall_rmi is not None and confidence is not None else None,
             ],
             "domains": domain_results,
             "caps_applied": caps_applied,
@@ -253,9 +257,8 @@ class ScoringEngineV2:
                     ),
                 })
 
-            role_w = self.ROLE_WEIGHTS.get(
-                resp.respondent_role.value if resp.respondent_role else "TECHNICIAN", 0.20
-            )
+            role_key = resp.respondent_role.value if resp.respondent_role else ""
+            role_w = self.ROLE_WEIGHTS.get(role_key, 0.20)  # unroled/unknown → neutral 0.20
             q_w = question.weight or 1.0
             combined = role_w * q_w
 
@@ -270,8 +273,8 @@ class ScoringEngineV2:
         raw = total_weighted / total_weight if total_weight > 0 else None
 
         return {
-            "raw_score": round(raw, 2) if raw else None,
-            "final_score": round(raw, 2) if raw else None,  # caps applied later
+            "raw_score": round(raw, 2) if raw is not None else None,
+            "final_score": round(raw, 2) if raw is not None else None,  # caps applied later
             "response_count": len(responses),
             "evidence_blocked": evidence_blocked,
             "evidence_blocked_questions": evidence_blocked_questions,
@@ -398,19 +401,24 @@ class ScoringEngineV2:
                     self._cap_subdomain(sd_results, "AI.2", float(dq) + 0.5,
                                         f"CMMS data quality score = {dq:.1f}", caps,
                                         source="cmms_data_quality")
-                # Reactive ratio inversely caps WM.1 (planning is poor if reactive is high)
+                # Reactive ratio (fraction 0-1) inversely caps WM.1: a site that
+                # runs >50% reactive cannot claim mature planning & scheduling.
                 rr = (metrics.get("reactive_ratio") or {}).get("reactive_ratio")
                 if isinstance(rr, (int, float)) and rr > 0.5:
                     self._cap_subdomain(sd_results, "WM.1", 3.0,
                                         f"Reactive ratio {rr:.0%} — planning maturity capped",
                                         caps, source="cmms_reactive_ratio")
             elif upload.kind == "pm":
-                pmc = metrics.get("pm_compliance_rate") or metrics.get("compliance_rate")
+                # compliance_rate is a fraction 0-1 (see cmms_metrics.py).
+                pmc = metrics.get("pm_compliance_rate")
+                if pmc is None:
+                    pmc = metrics.get("compliance_rate")
                 if isinstance(pmc, (int, float)):
-                    # 0.95 -> ~4.5; 0.5 -> ~2.5
-                    derived = 1.0 + min(max(pmc, 0.0), 1.0) * 4.0
+                    # 0.95 -> 4.8 (no cap); 0.60 -> 3.4; 0.50 -> 3.0
+                    pmc_frac = min(max(pmc, 0.0), 1.0)
+                    derived = 1.0 + pmc_frac * 4.0
                     self._cap_subdomain(sd_results, "WM.2", derived + 0.3,
-                                        f"PM compliance {pmc:.0%}", caps,
+                                        f"PM compliance {pmc_frac:.0%}", caps,
                                         source="cmms_pm_compliance")
 
         return caps
@@ -527,10 +535,13 @@ class ScoringEngineV2:
     # ═══════════════════════════════════════════
 
     def _get_maturity_level(self, score: float) -> str:
+        if score is None:
+            return "Level 1 - Reactive"
+        clamped = max(1.0, min(5.0, score))
         for low, high, level_num, name in self.MATURITY_LEVELS:
-            if low <= score <= high:
+            if low <= clamped < high:
                 return f"Level {level_num} - {name}"
-        return "Level 1 - Reactive"
+        return "Level 5 - Prescriptive"
 
     # ═══════════════════════════════════════════
     #  VELOCITY

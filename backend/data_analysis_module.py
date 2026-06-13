@@ -3,15 +3,14 @@ Data Analysis Module - CMMS Data Import & Metrics Calculation
 Automated analysis of CMMS exports for evidence-based scoring
 """
 from sqlalchemy.orm import Session
-from models import DataAnalysis, Evidence, EvidenceType
 import pandas as pd
 from typing import Dict, Optional, List
 from datetime import datetime
 import os
-from scoring_engine import (
+from cmms_metrics import (
     calculate_reactive_ratio,
     calculate_pm_compliance,
-    calculate_data_graveyard_index
+    calculate_data_graveyard_index,
 )
 
 
@@ -39,7 +38,9 @@ class CMMSDataAnalyzer:
         "status": ["Status"]
     }
     
-    def __init__(self, db: Session, upload_dir: str = "./uploads/cmms_data"):
+    def __init__(self, db: Optional[Session] = None, upload_dir: str = "./uploads/cmms_data"):
+        # db is optional: the parse/metric methods are pure (no DB). The v2 flow
+        # stores results on CMMSUploadV2 in the API layer, not here.
         self.db = db
         self.upload_dir = upload_dir
         os.makedirs(upload_dir, exist_ok=True)
@@ -110,74 +111,37 @@ class CMMSDataAnalyzer:
         assessment_id: int,
         analyzer_id: int,
         file_path: str,
-        save_to_db: bool = True
+        save_to_db: bool = False,  # retained for signature compatibility; v2 stores on CMMSUploadV2
     ) -> Dict:
         """
         Complete work order analysis pipeline
         Calculates: Reactive Ratio, Data Quality, Work Type Distribution
         """
-        # Import data
         df = self.import_work_orders(file_path)
-        
-        # Calculate reactive ratio
-        reactive_metrics = calculate_reactive_ratio(df)
-        
-        # Calculate data quality
-        data_quality_metrics = calculate_data_graveyard_index(df)
-        
-        # Additional metrics
-        work_type_distribution = self._calculate_work_type_distribution(df)
-        
-        # Combine all metrics
+
         combined_metrics = {
-            "reactive_ratio": reactive_metrics,
-            "data_quality": data_quality_metrics,
-            "work_type_distribution": work_type_distribution,
+            "reactive_ratio": calculate_reactive_ratio(df),
+            "data_quality": calculate_data_graveyard_index(df),
+            "work_type_distribution": self._calculate_work_type_distribution(df),
             "total_records_analyzed": len(df),
-            "analysis_date": datetime.utcnow().isoformat()
+            "analysis_date": datetime.utcnow().isoformat(),
         }
-        
-        # Save to database
-        if save_to_db:
-            self._save_analysis_results(
-                assessment_id=assessment_id,
-                analyzer_id=analyzer_id,
-                analysis_type="Work Order Analysis",
-                metrics=combined_metrics,
-                data_source=os.path.basename(file_path)
-            )
-        
         return combined_metrics
-    
+
     def analyze_pm_compliance(
         self,
         assessment_id: int,
         analyzer_id: int,
         file_path: str,
-        save_to_db: bool = True
+        save_to_db: bool = False,
     ) -> Dict:
         """
         PM compliance analysis pipeline
         Calculates: On-time completion %, Average delay, Compliance trend
         """
-        # Import PM data
         df = self.import_pm_data(file_path)
-        
-        # Calculate compliance
-        pm_metrics = calculate_pm_compliance(df)
-        
-        # Save to database
-        if save_to_db:
-            self._save_analysis_results(
-                assessment_id=assessment_id,
-                analyzer_id=analyzer_id,
-                analysis_type="PM Compliance Analysis",
-                metrics=pm_metrics,
-                data_source=os.path.basename(file_path)
-            )
-        
-        return pm_metrics
-    
+        return calculate_pm_compliance(df)
+
     def _calculate_work_type_distribution(self, df: pd.DataFrame) -> Dict:
         """Calculate distribution of work types"""
         if 'work_order_type' not in df.columns:
@@ -194,32 +158,6 @@ class CMMSDataAnalyzer:
             }
         }
     
-    def _save_analysis_results(
-        self,
-        assessment_id: int,
-        analyzer_id: int,
-        analysis_type: str,
-        metrics: Dict,
-        data_source: str
-    ):
-        """Save analysis results to database"""
-        analysis = DataAnalysis(
-            assessment_id=assessment_id,
-            analyzed_by=analyzer_id,
-            analysis_type=analysis_type,
-            data_source=data_source,
-            metrics=metrics,
-            sample_size=metrics.get('total_records_analyzed'),
-            actual_value=metrics.get('reactive_ratio', {}).get('reactive_ratio'),
-            passed=metrics.get('reactive_ratio', {}).get('score', 0) >= 3
-        )
-        
-        self.db.add(analysis)
-        self.db.commit()
-        self.db.refresh(analysis)
-        
-        return analysis
-    
     def random_sample_audit(
         self,
         df: pd.DataFrame,
@@ -234,28 +172,6 @@ class CMMSDataAnalyzer:
             return df  # Return all if less than sample size
         
         return df.sample(n=sample_size, random_state=seed)
-    
-    def get_analysis_summary(self, assessment_id: int) -> Dict:
-        """Get summary of all data analyses for an assessment"""
-        analyses = self.db.query(DataAnalysis).filter(
-            DataAnalysis.assessment_id == assessment_id
-        ).all()
-        
-        summary = {
-            "total_analyses": len(analyses),
-            "analyses": []
-        }
-        
-        for analysis in analyses:
-            summary["analyses"].append({
-                "type": analysis.analysis_type,
-                "data_source": analysis.data_source,
-                "analyzed_at": analysis.analyzed_at.isoformat(),
-                "passed": analysis.passed,
-                "key_metrics": analysis.metrics
-            })
-        
-        return summary
     
     def detect_bad_actors(
         self,

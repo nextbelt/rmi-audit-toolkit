@@ -196,9 +196,14 @@ class AssessmentV2(Base):
 
     # Site metadata
     client_name = Column(String(255), nullable=False, index=True)
-    site_name = Column(String(255), nullable=False)
+    site_name = Column(String(255), nullable=False, index=True)
     industry = Column(String(100))
     site_criticality = Column(Float, default=1.0)
+
+    # Peer-segmentation metadata (drives benchmarking buckets + report header)
+    employee_count = Column(Integer, nullable=True)
+    region = Column(String(60), nullable=True)
+    lead_assessor = Column(String(120), nullable=True)
 
     # vNext fields
     assessment_mode = Column(Enum(AssessmentMode), nullable=False, default=AssessmentMode.STANDARD)
@@ -207,7 +212,7 @@ class AssessmentV2(Base):
 
     # Lifecycle
     status = Column(String(20), default="DRAFT")
-    assessment_date = Column(DateTime, nullable=False)
+    assessment_date = Column(DateTime, nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
@@ -236,8 +241,8 @@ class ResponseV2(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False)
-    question_id = Column(Integer, ForeignKey("question_bank_v2.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False, index=True)
+    question_id = Column(Integer, ForeignKey("question_bank_v2.id"), nullable=False, index=True)
     respondent_role = Column(Enum(TargetRoleV2), nullable=True)
 
     # Response data
@@ -289,7 +294,7 @@ class SubdomainScore(Base):
 
     id = Column(Integer, primary_key=True, index=True)
 
-    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments_v2.id"), nullable=False, index=True)
     subdomain_id = Column(Integer, ForeignKey("subdomains.id"), nullable=False)
 
     raw_score = Column(Float, nullable=True)
@@ -333,6 +338,7 @@ class BenchmarkMetadata(Base):
     overall_percentile = Column(Integer, nullable=True)
     peer_count = Column(Integer, nullable=True)
     domain_percentiles = Column(JSON, nullable=True)
+    peer_group_criteria = Column(JSON, nullable=True)  # how the peer set was selected
     calculated_at = Column(DateTime, nullable=True)
 
     assessment = relationship("AssessmentV2", back_populates="benchmark")

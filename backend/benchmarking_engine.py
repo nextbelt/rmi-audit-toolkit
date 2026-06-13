@@ -238,43 +238,59 @@ class BenchmarkingEngine:
     # ═══════════════════════════════════════════
 
     def _domain_benchmarks(self, assessment_id: int, peer_scores: List[Dict]) -> Dict:
-        """Calculate per-domain percentiles."""
+        """Calculate per-domain percentiles.
+
+        Batched: 2 queries total (ours + all peers) instead of 5 x (1 + N peers).
+        """
         domains = self.db.query(Domain).order_by(Domain.display_order).all()
+        domain_by_id = {d.id: d.code for d in domains}
         peer_ids = [p["id"] for p in peer_scores]
+
+        # ── One query: our subdomain scores keyed by domain ──
+        our_by_domain: Dict[str, List[float]] = {}
+        our_rows = (
+            self.db.query(SubdomainScore.final_score, Subdomain.domain_id)
+            .join(Subdomain, SubdomainScore.subdomain_id == Subdomain.id)
+            .filter(SubdomainScore.assessment_id == assessment_id)
+            .all()
+        )
+        for final_score, domain_id in our_rows:
+            if final_score is not None:
+                our_by_domain.setdefault(domain_by_id.get(domain_id, ""), []).append(final_score)
+
+        # ── One query: ALL peer subdomain scores, grouped (assessment, domain) ──
+        peer_by_assessment_domain: Dict[tuple, List[float]] = {}
+        if peer_ids:
+            peer_rows = (
+                self.db.query(
+                    SubdomainScore.assessment_id, SubdomainScore.final_score, Subdomain.domain_id
+                )
+                .join(Subdomain, SubdomainScore.subdomain_id == Subdomain.id)
+                .filter(SubdomainScore.assessment_id.in_(peer_ids))
+                .all()
+            )
+            for a_id, final_score, domain_id in peer_rows:
+                if final_score is not None:
+                    code = domain_by_id.get(domain_id, "")
+                    peer_by_assessment_domain.setdefault((a_id, code), []).append(final_score)
 
         result = {}
         for dom in domains:
-            # Our subdomain scores
-            our_scores = (
-                self.db.query(SubdomainScore)
-                .join(Subdomain)
-                .filter(
-                    SubdomainScore.assessment_id == assessment_id,
-                    Subdomain.domain_id == dom.id,
-                )
-                .all()
+            our_list = our_by_domain.get(dom.code, [])
+            our_domain_avg = mean(our_list) if our_list else None
+
+            peer_domain_avgs = [
+                mean(scores)
+                for (a_id, code), scores in peer_by_assessment_domain.items()
+                if code == dom.code and scores
+            ]
+
+            pct = (
+                self._percentile(our_domain_avg, peer_domain_avgs)
+                if peer_domain_avgs and our_domain_avg is not None else None
             )
-            our_domain_avg = mean([s.final_score for s in our_scores if s.final_score])
-
-            # Peer domain averages
-            peer_domain_avgs = []
-            for pid in peer_ids:
-                peer_sds = (
-                    self.db.query(SubdomainScore)
-                    .join(Subdomain)
-                    .filter(
-                        SubdomainScore.assessment_id == pid,
-                        Subdomain.domain_id == dom.id,
-                    )
-                    .all()
-                )
-                if peer_sds:
-                    peer_domain_avgs.append(mean([s.final_score for s in peer_sds if s.final_score]))
-
-            pct = self._percentile(our_domain_avg, peer_domain_avgs) if peer_domain_avgs else None
-
             result[dom.code] = {
-                "score": round(our_domain_avg, 2) if our_domain_avg else None,
+                "score": round(our_domain_avg, 2) if our_domain_avg is not None else None,
                 "percentile": pct,
                 "quartile": self._quartile(pct) if pct is not None else None,
             }
@@ -325,26 +341,40 @@ class BenchmarkingEngine:
     # ═══════════════════════════════════════════
 
     def _persist_benchmark(self, assessment: AssessmentV2, result: Dict):
-        """Save benchmark metadata."""
+        """Save benchmark metadata.
+
+        Columns are JSON-typed, so dicts are stored directly (no json.dumps).
+        Field names must match the BenchmarkMetadata model exactly.
+        """
         existing = self.db.query(BenchmarkMetadata).filter(
             BenchmarkMetadata.assessment_id == assessment.id
         ).first()
 
-        import json
+        peer_group = result.get("peer_group", {})
+        peer_count = result["peer_stats"]["count"]
+        overall_percentile = result["percentile"]
+        domain_percentiles = result.get("domain_benchmarks", {})
+
         if existing:
-            existing.peer_group_criteria = json.dumps(result.get("peer_group", {}))
-            existing.peer_count = result["peer_stats"]["count"]
-            existing.percentile_overall = result["percentile"]
-            existing.percentile_by_domain = json.dumps(result.get("domain_benchmarks", {}))
+            existing.peer_group_criteria = peer_group
+            existing.peer_count = peer_count
+            existing.overall_percentile = overall_percentile
+            existing.domain_percentiles = domain_percentiles
+            existing.industry_code = peer_group.get("industry")
+            existing.site_size_category = (peer_group.get("size") or "").upper() or None
+            existing.region = peer_group.get("region")
             existing.calculated_at = datetime.utcnow()
         else:
-            bm = BenchmarkMetadata(
+            self.db.add(BenchmarkMetadata(
                 assessment_id=assessment.id,
-                peer_group_criteria=json.dumps(result.get("peer_group", {})),
-                peer_count=result["peer_stats"]["count"],
-                percentile_overall=result["percentile"],
-                percentile_by_domain=json.dumps(result.get("domain_benchmarks", {})),
-            )
-            self.db.add(bm)
+                peer_group_criteria=peer_group,
+                peer_count=peer_count,
+                overall_percentile=overall_percentile,
+                domain_percentiles=domain_percentiles,
+                industry_code=peer_group.get("industry"),
+                site_size_category=(peer_group.get("size") or "").upper() or None,
+                region=peer_group.get("region"),
+                calculated_at=datetime.utcnow(),
+            ))
 
         self.db.commit()
