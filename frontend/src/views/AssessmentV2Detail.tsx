@@ -7,7 +7,7 @@ import React, {
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type { QuestionV2, ISOGapReport, ISOClauseResult, ISOSection } from "../api/clientV2";
-import { v2API } from "../api/clientV2";
+import { v2API, generateAndDownloadReport } from "../api/clientV2";
 import { useV2Store } from "../api/storeV2";
 import { Card, EvidenceWidget, CMMSUploadPanel, ErrorBoundary, DomainRadar } from "../components";
 import { theme } from "../styles/theme";
@@ -1821,9 +1821,27 @@ const PILLAR_GROUPS: Array<{ code: string; name: string; domains: string[] }> = 
 ];
 
 const ScoresTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
-  const { scoringResult, scoringLoading, calculateScores, domains, progress } =
+  const { scoringResult, scoringLoading, calculateScores, domains, progress, currentAssessment } =
     useV2Store();
   const [radarView, setRadarView] = useState<RadarView>("domains");
+  const [reportBusy, setReportBusy] = useState(false);
+  const [reportErr, setReportErr] = useState<string | null>(null);
+
+  const handleDownloadReport = async () => {
+    setReportErr(null);
+    setReportBusy(true);
+    try {
+      await generateAndDownloadReport(
+        assessmentId,
+        currentAssessment?.organization_name || "Client",
+        currentAssessment?.site_name || "Site",
+      );
+    } catch (e: any) {
+      setReportErr(e?.response?.data?.detail || "Report generation failed.");
+    } finally {
+      setReportBusy(false);
+    }
+  };
 
   const domainName = (code: string) =>
     domains.find((d) => d.code === code)?.name || code;
@@ -1894,6 +1912,29 @@ const ScoresTab: React.FC<{ assessmentId: number }> = ({ assessmentId }) => {
 
   return (
     <div>
+      {/* Header + report download */}
+      <div
+        className="row"
+        style={{ justifyContent: "space-between", alignItems: "center", marginBottom: 14, gap: 12, flexWrap: "wrap" }}
+      >
+        <div>
+          <h2 style={{ margin: 0, fontSize: 18, color: "var(--ink)" }}>Scores & Maturity</h2>
+          <div style={{ color: "var(--muted)", fontSize: 12 }}>
+            Executive view across pillars, domains, and subdomains
+          </div>
+        </div>
+        <div className="row" style={{ gap: 10, alignItems: "center" }}>
+          {reportErr && (
+            <span role="alert" style={{ color: "var(--danger)", fontSize: 12 }}>
+              {reportErr}
+            </span>
+          )}
+          <button className="btn primary" disabled={reportBusy} onClick={handleDownloadReport}>
+            {reportBusy ? "Generating PDF…" : "Download Executive Report"}
+          </button>
+        </div>
+      </div>
+
       {/* KPI strip */}
       <div className="stat-strip">
         <StatCard

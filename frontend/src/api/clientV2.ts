@@ -530,6 +530,26 @@ export const v2API = {
     return r.data;
   },
 
+  // ── Reports ──
+  generateReport: async (
+    assessmentId: number,
+  ): Promise<{ message: string; file_path: string; download_url: string }> => {
+    const r = await api.post(`/assessments/${assessmentId}/generate-report`);
+    return r.data;
+  },
+
+  downloadReport: async (assessmentId: number): Promise<Blob> => {
+    const r = await api.get(`/assessments/${assessmentId}/report/download`, {
+      responseType: "blob",
+    });
+    return r.data;
+  },
+
+  finalizeAssessment: async (assessmentId: number) => {
+    const r = await api.post(`/assessments/${assessmentId}/finalize`);
+    return r.data;
+  },
+
   // ── Direct Questions ──
   listAllQuestions: async (
     domain?: string,
@@ -547,5 +567,28 @@ export const v2API = {
     return r.data;
   },
 };
+
+/**
+ * Generate (if needed) and download the executive PDF for an assessment,
+ * triggering a browser "Save as". Returns nothing; throws on failure so the
+ * caller can surface an error.
+ */
+export async function generateAndDownloadReport(
+  assessmentId: number,
+  orgName: string,
+  siteName: string,
+): Promise<void> {
+  await v2API.generateReport(assessmentId);
+  const blob = await v2API.downloadReport(assessmentId);
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  const safe = `RMI_Audit_Report_${orgName}_${siteName}`.replace(/[^A-Za-z0-9._-]+/g, "_");
+  link.download = `${safe}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+}
 
 export default v2API;
