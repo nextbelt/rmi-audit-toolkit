@@ -1,0 +1,39 @@
+# Keep build contexts small and free of secrets/artifacts.
+# (Dev images bind-mount source; this matters for any COPY-based build.)
+
+# Python
+.venv/
+**/__pycache__/
+**/*.pyc
+**/.pytest_cache/
+backend/*.db
+backend/reports/*.pdf
+backend/reports/*.png
+backend/uploads/
+
+# Node / frontend
+**/node_modules/
+frontend/dist/
+
+# VCS / IDE / OS
+.git/
+.gitignore
+.github/
+*.code-workspace
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Env & secrets (never bake into an image)
+.env
+.env.*
+**/.env
+**/.env.*
+*secrets*.json
+*credentials*.json
+*vars*.json
+
+# Docs (not needed at runtime)
+*.md
+docs/

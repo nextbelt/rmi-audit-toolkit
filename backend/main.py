@@ -30,7 +30,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.security import OAuth2PasswordRequestForm
-from jose import jwt
+import jwt  # PyJWT
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 

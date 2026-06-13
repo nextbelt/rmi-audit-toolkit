@@ -9,8 +9,7 @@ email-validator==2.1.0
 sqlalchemy==2.0.23
 psycopg2-binary==2.9.9
 # Authentication & Security
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+PyJWT==2.9.0
 python-multipart==0.0.6
 bcrypt==4.0.1
 supabase==2.3.0
@@ -19,12 +18,9 @@ pandas==2.1.3
 numpy==1.26.2
 openpyxl==3.1.2
 xlrd==2.0.1
-# Reporting & Visualization
+# Reporting & Visualization (matplotlib renders the radar; reportlab builds the PDF)
 reportlab==4.0.7
 matplotlib==3.8.2
-seaborn==0.13.0
-plotly==5.18.0
-jinja2==3.1.2
 # File Handling
 pillow==10.1.0
 python-magic==0.4.27
