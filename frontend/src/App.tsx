@@ -1,19 +1,20 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, Link } from 'react-router-dom';
 import { useAuthStore } from './api/store';
 import { Sidebar } from './components';
-import {
-  Login,
-  UserManagement,
-  DashboardV2,
-  AssessmentV2Detail,
-  Home,
-  Reports,
-  Benchmarks,
-  AuditLog,
-  Settings,
-} from './views';
+import { Login } from './views';
 import './styles/global.css';
+
+// Code-split the authenticated views so the login bundle stays tiny (the
+// assessment detail + charts are large and only needed once signed in).
+const UserManagement = lazy(() => import('./views/UserManagement').then((m) => ({ default: m.UserManagement })));
+const DashboardV2 = lazy(() => import('./views/DashboardV2').then((m) => ({ default: m.DashboardV2 })));
+const AssessmentV2Detail = lazy(() => import('./views/AssessmentV2Detail').then((m) => ({ default: m.AssessmentV2Detail })));
+const Home = lazy(() => import('./views/Home').then((m) => ({ default: m.Home })));
+const Reports = lazy(() => import('./views/Reports').then((m) => ({ default: m.Reports })));
+const Benchmarks = lazy(() => import('./views/Benchmarks').then((m) => ({ default: m.Benchmarks })));
+const AuditLog = lazy(() => import('./views/AuditLog').then((m) => ({ default: m.AuditLog })));
+const Settings = lazy(() => import('./views/Settings').then((m) => ({ default: m.Settings })));
 
 // ── Protected route wrapper ────────────────────────────────────────────────
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -104,7 +105,17 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       <Sidebar collapsed={collapsed} setCollapsed={setCollapsed} />
       <div className="main-col">
         <TopBar />
-        <main style={{ flex: 1 }}>{children}</main>
+        <main style={{ flex: 1 }}>
+          <Suspense
+            fallback={
+              <div style={{ display: 'grid', placeItems: 'center', padding: '60px' }}>
+                <div className="spinner" />
+              </div>
+            }
+          >
+            {children}
+          </Suspense>
+        </main>
       </div>
     </div>
   );
