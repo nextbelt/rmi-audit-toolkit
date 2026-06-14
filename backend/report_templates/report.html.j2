@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<style>
+{{ fonts_css }}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: 'Inter', Arial, sans-serif; color: #2b3137; font-size: 10.4pt; line-height: 1.5; }
+
+h2, h3, h4 { color: {{ navy }}; }
+p { margin: 0 0 9px; }
+b, strong { color: #1b2026; font-weight: 600; }
+a { color: {{ blue }}; }
+
+.page { page-break-before: always; }
+.avoid { page-break-inside: avoid; }
+.muted { color: #71797f; }
+
+/* Section header */
+.sec { margin: 0 0 14px; }
+.sec .eyebrow { font-size: 9.5px; letter-spacing: .26em; text-transform: uppercase; color: {{ accent }}; font-weight: 700; }
+.sec h2 { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; margin-top: 4px; }
+.sec .rule { height: 3px; width: 46px; background: linear-gradient(90deg, {{ blue }}, {{ accent }}); border-radius: 2px; margin-top: 9px; }
+.lead { font-size: 11.2pt; color: #3a4148; line-height: 1.6; }
+
+/* Attestation card */
+.attest { border: 1px solid #dde4ec; border-left: 4px solid {{ blue }}; border-radius: 10px;
+  background: #f6f9fc; padding: 18px 20px; margin: 14px 0; }
+.attest h3 { font-size: 13px; margin-bottom: 7px; }
+.attest p { font-size: 10pt; color: #454d54; }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 16px 0 6px; }
+.kpi { border: 1px solid #e4e9ef; border-radius: 12px; padding: 14px 15px; position: relative; overflow: hidden; background: #fff; }
+.kpi::before { content:""; position:absolute; top:0; left:0; right:0; height:3px; background: var(--tone, {{ accent }}); }
+.kpi .k { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: #8b939a; }
+.kpi .v { font-size: 27px; font-weight: 800; color: {{ navy }}; line-height: 1; margin-top: 9px; }
+.kpi .v .u { font-size: 12px; color: #9aa1a8; font-weight: 600; }
+.kpi .s { font-size: 9.5pt; color: #5a626a; margin-top: 7px; }
+
+/* chips */
+.chip { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 9.5px; font-weight: 700;
+  border: 1px solid transparent; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; font-size: 9.7pt; }
+thead th { background: {{ navy }}; color: #fff; text-align: left; padding: 8px 11px; font-weight: 600; font-size: 9pt;
+  letter-spacing: .02em; }
+tbody td { padding: 8px 11px; border-bottom: 1px solid #eef1f4; vertical-align: top; }
+tbody tr:nth-child(even) td { background: #f7f9fb; }
+.num { text-align: center; font-variant-numeric: tabular-nums; font-weight: 700; }
+
+/* pillar cards */
+.pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 14px 0; }
+.pcard { border: 1px solid #e4e9ef; border-radius: 12px; padding: 16px; background: #fff; }
+.pcard .nm { font-size: 13px; font-weight: 700; color: {{ navy }}; }
+.pcard .sc { font-size: 30px; font-weight: 800; margin: 6px 0 2px; }
+.pcard .dm { font-size: 9pt; color: #8b939a; }
+
+/* two-column layout for table + chart */
+.cols { display: grid; grid-template-columns: 1.25fr 1fr; gap: 22px; align-items: start; }
+.chartcard { border: 1px solid #e9edf2; border-radius: 12px; padding: 12px; background: #fcfdfe; }
+.chartcard svg { width: 100%; height: auto; }
+.chartcap { font-size: 8.5pt; color: #8b939a; text-align: center; margin-top: 4px; }
+
+/* findings / lists */
+.finding { padding: 9px 0; border-bottom: 1px solid #f0f3f6; font-size: 10pt; }
+.finding:last-child { border-bottom: none; }
+
+/* roadmap */
+.phase { margin: 12px 0; }
+.phase .ph-h { font-size: 12px; font-weight: 700; color: {{ navy }}; border-left: 3px solid {{ accent }}; padding-left: 9px; }
+.phase ol { margin: 9px 0 0 24px; }
+.phase li { margin: 4px 0; font-size: 10pt; }
+
+/* appendix headings */
+.apx-tag { display:inline-block; background:{{ blue }}; color:#fff; font-size:9px; font-weight:700; letter-spacing:.1em;
+  padding:3px 9px; border-radius:5px; text-transform:uppercase; }
+
+.callout { background: #fff8ec; border: 1px solid #f0dcb4; border-radius: 9px; padding: 12px 15px; font-size: 9.8pt; color: #6b5a30; margin: 12px 0; }
+.spacer { height: 10px; }
+.toc li { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #eef1f4; font-size:10.5pt; }
+.toc li .n { color:#9aa1a8; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+
+{% macro scorechip(level, score) -%}
+<span class="chip" style="background:{{ level.color }}1A; color:{{ level.color }}; border-color:{{ level.color }}45;">{{ '%.2f'|format(score) if score is not none else '—' }}&nbsp;·&nbsp;L{{ level.n }}</span>
+{%- endmacro %}
+
+<!-- ============ CONTENTS + ATTESTATION ============ -->
+<section>
+  <div class="sec"><div class="eyebrow">Engagement</div><h2>Report Contents &amp; Scope</h2><div class="rule"></div></div>
+
+  <div class="attest">
+    <h3>Independent Reliability Maturity Assessment</h3>
+    <p>{{ firm.name }} conducted an independent evaluation of the maintenance and reliability management
+    system at <b>{{ client }} — {{ site }}</b>. The assessment applies the Reliability Maturity Index (RMI)
+    framework: five domains and fifteen subdomains, scored 1–5 against defined maturity anchors and weighted
+    by respondent role, with high-maturity claims credited only where supporting evidence was verified.
+    {% if responses %}This report is based on <b>{{ responses }}</b> scored interview responses{% if cmms %} and {{ cmms|length }} CMMS data snapshot(s){% endif %}.{% endif %}
+    Scores reflect the conditions observed as of the assessment date.</p>
+  </div>
+
+  <ul class="toc">
+    <li><span>Executive Summary</span><span class="n">01</span></li>
+    <li><span>Maturity Scorecard — Pillars &amp; Domains</span><span class="n">02</span></li>
+    <li><span>Domain &amp; Subdomain Detail</span><span class="n">03</span></li>
+    <li><span>Key Findings</span><span class="n">04</span></li>
+    <li><span>Priority Fixes — Lowest-Scoring Items</span><span class="n">05</span></li>
+    {% if cmms %}<li><span>CMMS Data Analysis</span><span class="n">06</span></li>{% endif %}
+    <li><span>Strategic Roadmap (30 / 60 / 90 Day)</span><span class="n">07</span></li>
+    <li><span>Evidence &amp; Assurance Summary</span><span class="n">08</span></li>
+    <li><span>Appendix A — Methodology &amp; Scoring Framework</span><span class="n">A</span></li>
+    <li><span>Appendix B — Full Subdomain Register</span><span class="n">B</span></li>
+    <li><span>Appendix C — Scope, Coverage &amp; Limitations</span><span class="n">C</span></li>
+  </ul>
+</section>
+
+<!-- ============ EXECUTIVE SUMMARY ============ -->
+<section class="page">
+  <div class="sec"><div class="eyebrow">01 — Executive Summary</div><h2>Where {{ site }} Stands</h2><div class="rule"></div></div>
+  <p class="lead">
+    {{ site }} achieved an overall Reliability Maturity Index of
+    <b>{{ '%.2f'|format(overall) if overall is not none else 'N/A' }} / 5.00</b>
+    ({% if overall_level.n %}Level {{ overall_level.n }} — {{ overall_level.label }}{% else %}not scored{% endif %}).
+    This places the site in the <b>{{ overall_level.label|lower }}</b> band of maturity. The sections that follow
+    break the score down by pillar and domain, identify the specific items dragging each area down, and lay out a
+    prioritized 30/60/90-day roadmap to advance maturity.
+  </p>
+
+  <div class="kpis">
+    <div class="kpi" style="--tone: {{ overall_level.color }}"><div class="k">Overall RMI</div><div class="v">{{ '%.2f'|format(overall) if overall is not none else '—' }}<span class="u"> / 5</span></div><div class="s">{{ overall_level.label }}</div></div>
+    <div class="kpi" style="--tone: {{ accent }}"><div class="k">Scoring Confidence</div><div class="v">{{ confidence ~ '%' if confidence is not none else '—' }}</div><div class="s">{% if confidence is not none and confidence >= 80 %}Evidence well supported{% else %}Coverage gaps reduce confidence{% endif %}</div></div>
+    <div class="kpi" style="--tone: {{ blue }}"><div class="k">ISO 55001 Ready</div><div class="v">{{ iso_readiness ~ '%' if iso_readiness is not none else '—' }}</div><div class="s">Subdomains at/above the 3.0 floor</div></div>
+    <div class="kpi" style="--tone: {{ navy }}"><div class="k">Responses Scored</div><div class="v">{{ responses }}</div><div class="s">Role-weighted interview inputs</div></div>
+  </div>
+
+  {% if velocity and velocity.get('status') == 'calculated' %}
+  <div class="callout"><b>Maturity velocity:</b> {{ '%+.2f'|format(velocity.delta) }} RMI vs. the prior assessment ({{ velocity.interpretation }}).</div>
+  {% endif %}
+</section>
+
+<!-- ============ SCORECARD ============ -->
+<section class="page">
+  <div class="sec"><div class="eyebrow">02 — Maturity Scorecard</div><h2>By Pillar &amp; Domain</h2><div class="rule"></div></div>
+
+  <div class="pillars">
+    {% for p in pillars %}
+    <div class="pcard avoid">
+      <div class="nm">{{ p.name }}</div>
+      <div class="sc" style="color: {{ p.level.color }}">{{ '%.2f'|format(p.score) if p.score is not none else '—' }}</div>
+      <div class="muted" style="font-size:9.5pt; margin-bottom:6px;">{% if p.level.n %}Level {{ p.level.n }} — {{ p.level.label }}{% else %}—{% endif %}</div>
+      <div class="dm">Domains: {{ p.codes|join(', ') }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="cols">
+    <div>
+      <table class="avoid">
+        <thead><tr><th>Domain</th><th class="num">Score</th><th>Maturity Level</th>{% if peer_mean %}<th class="num">Peer</th>{% endif %}</tr></thead>
+        <tbody>
+          {% for d in domains %}
+          <tr>
+            <td><b>{{ d.code }}</b> — {{ d.name }}</td>
+            <td class="num" style="color: {{ d.level.color }}">{{ '%.2f'|format(d.score) if d.score is not none else '—' }}</td>
+            <td>{% if d.level.n %}Level {{ d.level.n }} — {{ d.level.label }}{% else %}—{% endif %}</td>
+            {% if peer_mean %}<td class="num muted">{{ '%.1f'|format(peer_mean) }}</td>{% endif %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="chartcard avoid">
+      {{ domain_radar|safe }}
+      <div class="chartcap">Domain maturity vs. {{ 'peer mean' if peer_mean else 'the 3.0 (Systematic) target' }}</div>
+    </div>
+  </div>
+
+  <div class="spacer"></div>
+  <div class="cols">
+    <div class="chartcard avoid">
+      {{ pillar_radar|safe }}
+      <div class="chartcap">People · Process · Technology profile</div>
+    </div>
+    <div>
+      <p class="muted" style="font-size:10pt;">The pillar view rolls the five domains up to the three executive
+      pillars: <b>People</b> (Workforce + Leadership), <b>Process</b> (Work Management + Strategy &amp; Governance),
+      and <b>Technology</b> (Asset Information). The domain view is the more granular cut used to target fixes.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DOMAIN DETAIL ============ -->
+<section class="page">
+  <div class="sec"><div class="eyebrow">03 — Detail</div><h2>Domain &amp; Subdomain Breakdown</h2><div class="rule"></div></div>
+  {% for d in domains %}
+  <div class="avoid" style="margin-bottom:14px;">
+    <h3 style="font-size:13px; margin-bottom:6px;">{{ d.code }} — {{ d.name }} &nbsp; {{ scorechip(d.level, d.score) }}</h3>
+    <table>
+      <thead><tr><th>Subdomain</th><th class="num">Score</th><th>Level</th><th>Note</th></tr></thead>
+      <tbody>
+        {% for sd in d.subdomains %}
+        <tr>
+          <td><b>{{ sd.code }}</b> {{ sd.name }}</td>
+          <td class="num" style="color: {{ sd.level.color }}">{{ '%.2f'|format(sd.score) if sd.score is not none else '—' }}</td>
+          <td>{{ sd.level.label }}</td>
+          <td class="muted">{% if sd.cap_applied %}{{ (sd.cap_reason or 'Capped')[:60] }}{% else %}—{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+
+<!-- ============ FINDINGS ============ -->
+{% if findings %}
+<section class="page">
+  <div class="sec"><div class="eyebrow">04 — Findings</div><h2>Key Findings</h2><div class="rule"></div></div>
+  {% for f in findings %}<div class="finding">&bull;&nbsp; {{ f|safe }}</div>{% endfor %}
+</section>
+{% endif %}
+
+<!-- ============ PRIORITY FIXES ============ -->
+{% if priority_fixes %}
+<section class="page">
+  <div class="sec"><div class="eyebrow">05 — Quick Wins</div><h2>Priority Fixes — Lowest-Scoring Items</h2><div class="rule"></div></div>
+  <p class="lead">The specific items dragging each domain down, weakest first — the fastest, most concrete wins. Pair these with the strategic roadmap.</p>
+  {% for g in priority_fixes %}
+  <div class="avoid" style="margin-top:14px;">
+    <h3 style="font-size:12.5px; margin-bottom:6px;">{{ g.code }} — {{ g.name }}</h3>
+    <table>
+      <thead><tr><th>Lowest-scoring item</th><th class="num">Score</th><th>Recommended action</th></tr></thead>
+      <tbody>
+        {% for it in g.rows %}
+        <tr>
+          <td><b>{{ it.code }}</b> &nbsp;{{ it.text }}{% if it.text|length >= 120 %}…{% endif %}</td>
+          <td class="num" style="color: {{ it.level.color }}">{{ '%.1f'|format(it.score) }}</td>
+          <td>{{ it.fix }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- ============ CMMS ============ -->
+{% if cmms %}
+<section class="page">
+  <div class="sec"><div class="eyebrow">06 — CMMS Data</div><h2>CMMS Data Analysis</h2><div class="rule"></div></div>
+  {% for c in cmms %}
+  <div class="avoid" style="margin-bottom:14px;">
+    <h3 style="font-size:12.5px; margin-bottom:6px;">{{ c.kind }} — {{ c.filename }} · {{ c.records }} records</h3>
+    {% if c.kpis %}
+    <table>
+      <thead><tr><th>Metric</th><th class="num">Value</th><th>Assessment</th></tr></thead>
+      <tbody>{% for label, value, sev in c.kpis %}<tr><td>{{ label }}</td><td class="num">{{ value }}</td><td class="muted">{{ sev }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% endif %}
+    {% if c.bad_actors %}<p class="muted" style="font-size:9.5pt; margin-top:7px;"><b>Top bad actors:</b> {% for k, v in c.bad_actors %}{{ k }} ({{ v }}){% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+<!-- ============ BLIND SPOTS ============ -->
+{% if blind_spots %}
+<section class="avoid" style="margin-top:18px;">
+  <div class="sec"><div class="eyebrow">Culture</div><h2>Cultural Blind Spots</h2><div class="rule"></div></div>
+  <p class="muted" style="font-size:10pt;">Subdomains where role perceptions diverge significantly — a signal of misalignment between frontline and leadership views.</p>
+  <table style="margin-top:8px;">
+    <thead><tr><th>Subdomain</th><th class="num">Role spread</th><th>Severity</th></tr></thead>
+    <tbody>{% for b in blind_spots %}<tr><td>{{ b.get('subdomain','') }}</td><td class="num">{{ '%.2f'|format(b.get('variance',0)) }}</td><td>{{ (b.get('severity') or '')|title }}</td></tr>{% endfor %}</tbody>
+  </table>
+</section>
+{% endif %}
+
+<!-- ============ ROADMAP ============ -->
+<section class="page">
+  <div class="sec"><div class="eyebrow">07 — Roadmap</div><h2>Strategic Roadmap · 30 / 60 / 90 Day</h2><div class="rule"></div></div>
+  <div class="callout"><b>Strategic priority:</b> concentrate first on {{ roadmap.weakest|join(', ') }} — the lowest-scoring domains — while sustaining strengths.</div>
+  {% for key in ['30','60','90'] %}
+  {% set ph = roadmap.phases[key] %}
+  {% if ph.actions %}
+  <div class="phase avoid">
+    <div class="ph-h">{{ ph.title }}</div>
+    <ol>{% for act in ph.actions %}<li>{{ act }}</li>{% endfor %}</ol>
+  </div>
+  {% endif %}
+  {% endfor %}
+  <p class="muted" style="font-size:9.5pt; margin-top:10px;">Assign an executive sponsor per phase, establish a weekly cadence, and re-baseline the RMI at 90 days to measure velocity.</p>
+</section>
+
+<!-- ============ EVIDENCE ============ -->
+<section class="avoid" style="margin-top:18px;">
+  <div class="sec"><div class="eyebrow">08 — Assurance</div><h2>Evidence &amp; Assurance Summary</h2><div class="rule"></div></div>
+  <table>
+    <thead><tr><th>Evidence Status</th><th class="num">Responses</th></tr></thead>
+    <tbody>{% for e in evidence %}<tr><td>{{ e.label }}</td><td class="num">{{ e.count }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <p class="muted" style="font-size:9.3pt; margin-top:8px;">Scores of 4 or above on evidence-required questions are credited only where supporting evidence has been verified; unverified claims are conservatively moderated, preserving the defensibility of the maturity rating.</p>
+</section>
+
+<!-- ============ APPENDIX A ============ -->
+<section class="page">
+  <span class="apx-tag">Appendix A</span>
+  <div class="sec" style="margin-top:10px;"><h2>Methodology &amp; Scoring Framework</h2><div class="rule"></div></div>
+  <p class="lead">The RMI framework scores reliability maturity across <b>5 domains</b> and <b>15 subdomains</b> on a 1–5 scale.</p>
+  <table class="avoid" style="margin:10px 0;">
+    <thead><tr><th>Level</th><th>Band</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td class="num" style="color:#C0392B">1</td><td>1.00 – 1.99 · Reactive</td><td>Run-to-failure; firefighting; minimal planning.</td></tr>
+      <tr><td class="num" style="color:#D9822B">2</td><td>2.00 – 2.99 · Emerging</td><td>Basic preventive practices exist but are inconsistent.</td></tr>
+      <tr><td class="num" style="color:{{ accent }}">3</td><td>3.00 – 3.59 · Systematic</td><td>Documented, repeatable processes followed across the site.</td></tr>
+      <tr><td class="num" style="color:#2E8C6A">4</td><td>3.60 – 4.29 · Proactive</td><td>Condition- and risk-based; metrics drive decisions.</td></tr>
+      <tr><td class="num" style="color:#1E7A52">5</td><td>4.30 – 5.00 · Prescriptive</td><td>Predictive/prescriptive; continuous improvement embedded.</td></tr>
+    </tbody>
+  </table>
+  <p style="font-size:10pt;"><b>Role weighting.</b> Responses are weighted by respondent role (technician, supervisor,
+  manager, planner, reliability engineer) so the people closest to the work carry appropriate weight.</p>
+  <p style="font-size:10pt;"><b>Evidence policy.</b> A high score (≥4) on an evidence-required question is credited only when
+  supporting evidence is verified; otherwise it is moderated. Weakest-link and cross-domain caps prevent a single
+  critical failure (e.g. no stop-work authority, no CMMS) from being masked by strong scores elsewhere.</p>
+  <p style="font-size:10pt;"><b>Confidence band.</b> Scoring confidence is reduced by evidence gaps and cross-role
+  variance; the band shown is the overall score ± (1 − confidence).</p>
+</section>
+
+<!-- ============ APPENDIX B ============ -->
+<section class="page">
+  <span class="apx-tag">Appendix B</span>
+  <div class="sec" style="margin-top:10px;"><h2>Full Subdomain Register</h2><div class="rule"></div></div>
+  <table>
+    <thead><tr><th>Code</th><th>Subdomain</th><th>Domain</th><th class="num">Score</th><th>Level</th><th>Cap / Note</th></tr></thead>
+    <tbody>
+      {% for d in domains %}{% for sd in d.subdomains %}
+      <tr>
+        <td><b>{{ sd.code }}</b></td><td>{{ sd.name }}</td><td class="muted">{{ d.code }}</td>
+        <td class="num" style="color: {{ sd.level.color }}">{{ '%.2f'|format(sd.score) if sd.score is not none else '—' }}</td>
+        <td>{{ sd.level.label }}</td>
+        <td class="muted">{% if sd.cap_applied %}{{ (sd.cap_reason or 'Capped')[:48] }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}{% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<!-- ============ APPENDIX C ============ -->
+<section class="page">
+  <span class="apx-tag">Appendix C</span>
+  <div class="sec" style="margin-top:10px;"><h2>Scope, Coverage &amp; Limitations</h2><div class="rule"></div></div>
+  <table class="avoid">
+    <tbody>
+      <tr><td style="width:38%"><b>Client</b></td><td>{{ client }}</td></tr>
+      <tr><td><b>Site</b></td><td>{{ site }}</td></tr>
+      <tr><td><b>Region</b></td><td>{{ region }}</td></tr>
+      <tr><td><b>Industry</b></td><td>{{ industry }}</td></tr>
+      <tr><td><b>Assessment mode</b></td><td>{{ mode }}</td></tr>
+      <tr><td><b>Lead assessor</b></td><td>{{ lead_assessor }}</td></tr>
+      <tr><td><b>Assessment date</b></td><td>{{ assessment_date }}</td></tr>
+      <tr><td><b>Report generated</b></td><td>{{ report_date }}</td></tr>
+      <tr><td><b>Scored responses</b></td><td>{{ responses }}</td></tr>
+      <tr><td><b>CMMS snapshots</b></td><td>{{ cmms|length }}</td></tr>
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:9.5pt; margin-top:12px;">This assessment reflects the conditions and information
+  made available as of the assessment date and is intended for the internal use of {{ client }} and {{ firm.name }}.
+  Findings are based on interview responses, observed practices, and any CMMS data provided; they do not constitute
+  a certification or guarantee of outcomes. Prepared by {{ firm.name }} — {{ firm.website }}.</p>
+</section>
+
+</body>
+</html>

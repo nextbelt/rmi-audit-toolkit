@@ -486,15 +486,29 @@ async def generate_report(
     threadpool to avoid blocking the async event loop.
     """
     get_v2_assessment_or_403(db, assessment_id, current_user)
-    from report_generator_v2 import ReportGeneratorV2
 
-    generator = ReportGeneratorV2(db, output_dir=settings.REPORT_OUTPUT_DIR)
+    # Premium HTML→PDF (Playwright/Chromium) is the primary renderer; if Chromium
+    # is unavailable in the environment it falls back to the ReportLab generator so
+    # report download never hard-fails.
+    pdf_path = None
     try:
+        from report_renderer import HTMLReportRenderer
         pdf_path = await run_in_threadpool(
-            generator.generate, assessment_id=assessment_id, generated_by=current_user.id
+            HTMLReportRenderer(db, output_dir=settings.REPORT_OUTPUT_DIR).generate,
+            assessment_id=assessment_id, generated_by=current_user.id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:  # Chromium missing / render error → fall back
+        logger.warning("HTML report failed (%s); falling back to ReportLab", exc)
+        from report_generator_v2 import ReportGeneratorV2
+        try:
+            pdf_path = await run_in_threadpool(
+                ReportGeneratorV2(db, output_dir=settings.REPORT_OUTPUT_DIR).generate,
+                assessment_id=assessment_id, generated_by=current_user.id,
+            )
+        except ValueError as exc2:
+            raise HTTPException(status_code=404, detail=str(exc2))
 
     audit.record(
         db,

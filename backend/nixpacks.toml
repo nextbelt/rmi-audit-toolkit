@@ -1,0 +1,18 @@
+# Railway/Nixpacks build customization for the backend.
+#
+# Installs headless Chromium + its system libraries so the premium HTML->PDF
+# report renderer (Playwright) works in production. The browser is installed to a
+# fixed path baked into the image and read back at runtime via the same env var.
+# If this ever fails, the app falls back to the ReportLab report generator, so
+# report download keeps working regardless.
+
+[variables]
+PLAYWRIGHT_BROWSERS_PATH = "/ms-playwright"
+
+# Runs after Nixpacks' default `install` phase (venv + pip install -r requirements.txt).
+[phases.browser]
+dependsOn = ["install"]
+cmds = [
+  ". /opt/venv/bin/activate && python -m playwright install-deps chromium",
+  ". /opt/venv/bin/activate && python -m playwright install chromium",
+]
