@@ -685,6 +685,35 @@ def _get_response_or_404(
     return response
 
 
+def _run_evidence_gate(question, file_bytes: bytes, mime: Optional[str],
+                       filename: Optional[str]) -> dict:
+    """Review an uploaded evidence file with the AI relevance gate.
+
+    Returns the analyze_evidence payload (verdict / is_evidence / reason / score).
+    Fail-open: any error (AI not configured, network, parse) yields an 'unclear'
+    verdict so a legitimate upload is never blocked by an AI outage.
+    """
+    try:
+        from ai_scoring import AIScoringEngine
+        rubric = question.scoring_rubric if question else None
+        if isinstance(rubric, str):
+            try:
+                rubric = json.loads(rubric)
+            except (json.JSONDecodeError, TypeError):
+                rubric = None
+        return AIScoringEngine().analyze_evidence(
+            question_text=(question.question_text if question else "") or "",
+            question_code=(question.question_code if question else "") or "",
+            scoring_rubric=rubric if isinstance(rubric, dict) else None,
+            file_bytes=file_bytes, mime_type=mime, filename=filename,
+        )
+    except Exception as exc:  # noqa: BLE001 - never block an upload on AI failure
+        logger.warning("evidence relevance gate unavailable: %s", exc)
+        return {"verdict": "unclear", "is_evidence": None, "numeric_score": None,
+                "confidence": "LOW",
+                "reason": "AI evidence check unavailable; accepted pending manual review."}
+
+
 @router.post("/assessments/{assessment_id}/responses/{question_id}/evidence")
 async def upload_evidence(
     assessment_id: int,
@@ -693,7 +722,7 @@ async def upload_evidence(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Attach an evidence file to a response."""
+    """Attach an evidence file to a response, gated by an AI relevance check."""
     assessment = get_v2_assessment_or_403(db, assessment_id, current_user)
     if getattr(assessment, "finalized_at", None) is not None:
         raise HTTPException(403, "Assessment is finalized; evidence cannot be modified.")
@@ -701,6 +730,8 @@ async def upload_evidence(
     response = _get_response_or_404(db, assessment_id, question_id, current_user)
 
     subdir = assessment_upload_subdir(assessment_id, "evidence")
+    raw = await file.read()        # bytes for the AI gate
+    await file.seek(0)             # rewind so save_upload re-reads the stream
     stored = await save_upload(file, subdir=subdir)
 
     # If there was a prior evidence file, drop the old object
@@ -716,9 +747,30 @@ async def upload_evidence(
     response.evidence_size_bytes = stored.bytes
     response.evidence_uploaded_at = datetime.utcnow()
 
-    # Move evidence_status forward if it was waiting
-    if response.evidence_status == EvidenceStatus.PENDING_EVIDENCE:
-        response.evidence_status = EvidenceStatus.PENDING_VERIFICATION
+    # ── AI relevance gate ──────────────────────────────────────────────
+    # An LLM reviews the file so an unrelated image (e.g. a selfie) can't be
+    # passed off as evidence to remove the confidence penalty. Runs off the
+    # event loop; fail-open when the AI is unavailable or genuinely unsure.
+    question = db.query(QuestionV2).filter(QuestionV2.id == question_id).first()
+    gate = await run_in_threadpool(
+        _run_evidence_gate, question, raw, response.evidence_mime, file.filename
+    )
+    verdict = str(gate.get("verdict") or "unclear").lower()
+    response.ai_suggested_score = gate.get("numeric_score")
+    response.ai_observations = ((gate.get("reason") or gate.get("observations") or "")[:1000]) or None
+    response.ai_confidence = gate.get("confidence")
+    response.ai_analyzed_at = datetime.utcnow()
+
+    requires_evidence = bool(question and question.evidence_required)
+    if requires_evidence:
+        # Irrelevant evidence does NOT clear the requirement — it stays a
+        # confidence drag (REJECTED). Relevant or unclear advances to pending
+        # verification (a human can still confirm).
+        response.evidence_status = (
+            EvidenceStatus.REJECTED if verdict == "irrelevant"
+            else EvidenceStatus.PENDING_VERIFICATION
+        )
+    # Not-required questions keep their resting status; the AI read is still saved.
 
     db.commit()
     db.refresh(response)
@@ -730,7 +782,8 @@ async def upload_evidence(
         actor_email=str(current_user.email),
         target_type="response_v2",
         target_id=response.id,
-        details={"question_id": question_id, "filename": file.filename, "bytes": stored.bytes},
+        details={"question_id": question_id, "filename": file.filename,
+                 "bytes": stored.bytes, "ai_verdict": verdict},
     )
 
     return {
@@ -739,6 +792,11 @@ async def upload_evidence(
         "size_bytes": response.evidence_size_bytes,
         "uploaded_at": response.evidence_uploaded_at.isoformat(),
         "evidence_status": response.evidence_status.value if response.evidence_status else None,
+        "ai_verdict": verdict,                       # relevant | irrelevant | unclear
+        "ai_reason": response.ai_observations,
+        "ai_suggested_score": response.ai_suggested_score,
+        "ai_confidence": response.ai_confidence,
+        "accepted": verdict != "irrelevant",
     }
 
 

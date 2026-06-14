@@ -54,14 +54,21 @@ export const EvidenceWidget: React.FC<EvidenceWidgetProps> = ({
   const [busy, setBusy] = useState<null | 'upload' | 'analyze' | 'delete' | 'preview'>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<{
+    accepted: boolean;
+    ai_verdict: 'relevant' | 'irrelevant' | 'unclear';
+    ai_reason: string | null;
+  } | null>(null);
 
   const isImage = evidenceFile?.mime?.startsWith('image/');
 
   const handleUpload = async (file: File) => {
     setError(null);
+    setVerdict(null);
     setBusy('upload');
     try {
-      await uploadEvidence(assessmentId, questionId, file);
+      const res = await uploadEvidence(assessmentId, questionId, file);
+      setVerdict(res);
       setPreviewUrl(null);
     } catch (e: any) {
       setError(e?.response?.data?.detail || e?.message || 'Upload failed');
@@ -86,6 +93,7 @@ export const EvidenceWidget: React.FC<EvidenceWidgetProps> = ({
     if (!evidenceFile) return;
     if (!confirm(`Remove "${evidenceFile.filename || 'evidence'}"?`)) return;
     setError(null);
+    setVerdict(null);
     setBusy('delete');
     try {
       await deleteEvidence(assessmentId, questionId);
@@ -203,6 +211,31 @@ export const EvidenceWidget: React.FC<EvidenceWidgetProps> = ({
         <div style={{ marginTop: 8, color: 'var(--danger)', fontSize: 11.5 }}>
           {error}
         </div>
+      )}
+
+      {verdict && (
+        (() => {
+          const v = verdict.ai_verdict;
+          const tone =
+            v === 'irrelevant'
+              ? { bg: 'rgba(194,83,60,0.08)', bd: 'rgba(194,83,60,0.35)', fg: 'var(--danger)', icon: '⚠', label: 'Rejected — not valid evidence' }
+              : v === 'relevant'
+              ? { bg: 'rgba(13,138,94,0.08)', bd: 'rgba(13,138,94,0.30)', fg: 'var(--ok)', icon: '✓', label: 'Accepted — relevant evidence' }
+              : { bg: 'rgba(184,134,11,0.08)', bd: 'rgba(184,134,11,0.30)', fg: 'var(--warn)', icon: '•', label: 'Saved — flagged for manual review' };
+          return (
+            <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: tone.bg, border: `1px solid ${tone.bd}`, fontSize: 11.5 }}>
+              <div style={{ color: tone.fg, fontWeight: 700 }}>{tone.icon} AI evidence check · {tone.label}</div>
+              {verdict.ai_reason && (
+                <div style={{ marginTop: 3, color: 'var(--ink-2)', lineHeight: 1.45 }}>{verdict.ai_reason}</div>
+              )}
+              {v === 'irrelevant' && (
+                <div style={{ marginTop: 3, color: 'var(--muted)' }}>
+                  This file does not count toward scoring confidence. Upload evidence that actually addresses the question.
+                </div>
+              )}
+            </div>
+          );
+        })()
       )}
 
       {hasAI && aiAnalysis && (

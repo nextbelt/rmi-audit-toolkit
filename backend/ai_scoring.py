@@ -308,16 +308,23 @@ Format your response EXACTLY as JSON:
         data_url = f"data:{mime};base64,{b64}"
 
         user_prompt = (
-            f"You are an RMI (Reliability Maturity) auditor. Inspect this evidence image "
-            f"submitted in response to a maturity question.\n\n"
+            f"You are an RMI (Reliability Maturity) auditor reviewing a file a client "
+            f"uploaded as EVIDENCE for a maturity question.\n\n"
             f"**Question ({question_code}):** {question_text}{rubric_block}{notes_block}\n\n"
-            "Decide:\n"
-            "1. A suggested maturity score 1-5 (decimals OK) based ONLY on what the image shows.\n"
-            "2. 2-4 concrete observations from the image (what you can see — equipment, "
-            "boards, screenshots, logs, etc.).\n"
-            "3. Confidence (HIGH / MEDIUM / LOW). LOW if the image is ambiguous or unrelated.\n\n"
+            "STEP 1 — GATEKEEP. Decide whether this image is genuine, relevant evidence for "
+            "THIS question. Valid evidence looks like: equipment/asset photos, maintenance "
+            "boards, control-room/CMMS/dashboard screenshots, work orders, logs, procedures, "
+            "documents. It is NOT valid evidence if it is a selfie or portrait, a random or "
+            "unrelated photo, a blank/illegible image, a meme/joke, or has nothing to do with "
+            "the question's topic.\n"
+            "  - is_evidence: true only if it is plausibly relevant evidence for THIS question.\n"
+            "  - verdict: \"relevant\" | \"irrelevant\" | \"unclear\" (use unclear only if you truly cannot tell).\n"
+            "  - reason: ONE sentence — what you see, and whether it relates to the question.\n\n"
+            "STEP 2 — If relevant, also give a suggested maturity score 1-5 (decimals OK) and "
+            "2-4 concrete observations. If irrelevant, set numeric_score to null.\n\n"
             "Respond as JSON: "
-            '{"numeric_score": <number|null>, "observations": "<string>", '
+            '{"is_evidence": <true|false>, "verdict": "<relevant|irrelevant|unclear>", '
+            '"reason": "<string>", "numeric_score": <number|null>, "observations": "<string>", '
             '"confidence": "<HIGH|MEDIUM|LOW>", "key_findings": ["<finding>", ...]}'
         )
 
@@ -368,15 +375,21 @@ Format your response EXACTLY as JSON:
         analyzed_kind: str,
     ) -> Dict[str, Any]:
         prompt = (
-            f"You are an RMI (Reliability Maturity) auditor. Analyze the extracted text "
-            f"from an evidence document in response to a maturity question.\n\n"
+            f"You are an RMI (Reliability Maturity) auditor reviewing a document a client "
+            f"uploaded as EVIDENCE for a maturity question.\n\n"
             f"**Question ({question_code}):** {question_text}{rubric_block}{notes_block}\n\n"
-            f"**Extracted text:**\n{extracted_text}\n\n"
-            "Provide a suggested maturity score (1-5, decimals OK), 2-4 concrete observations, "
-            "and a confidence level. If the document doesn't clearly relate to the question, "
-            "return numeric_score=null and confidence=LOW.\n\n"
+            f"**Extracted document text:**\n{extracted_text}\n\n"
+            "STEP 1 — GATEKEEP. Decide whether this document is genuine, relevant evidence for "
+            "THIS question (e.g. a procedure, policy, work order, report, log, register). It is "
+            "NOT valid evidence if it is unrelated to the question's topic, empty, or junk.\n"
+            "  - is_evidence: true only if it is plausibly relevant evidence for THIS question.\n"
+            "  - verdict: \"relevant\" | \"irrelevant\" | \"unclear\".\n"
+            "  - reason: ONE sentence explaining the verdict.\n\n"
+            "STEP 2 — If relevant, also give a suggested maturity score (1-5, decimals OK) and "
+            "2-4 concrete observations. If irrelevant, set numeric_score to null.\n\n"
             "Respond as JSON: "
-            '{"numeric_score": <number|null>, "observations": "<string>", '
+            '{"is_evidence": <true|false>, "verdict": "<relevant|irrelevant|unclear>", '
+            '"reason": "<string>", "numeric_score": <number|null>, "observations": "<string>", '
             '"confidence": "<HIGH|MEDIUM|LOW>", "key_findings": ["<finding>", ...]}'
         )
 
@@ -431,12 +444,23 @@ Format your response EXACTLY as JSON:
         if not isinstance(findings, list):
             findings = [str(findings)]
 
+        # Relevance gate verdict.
+        verdict = str(payload.get("verdict", "")).strip().lower()
+        if verdict not in {"relevant", "irrelevant", "unclear"}:
+            # Derive from is_evidence if the model didn't return a verdict string.
+            ev = payload.get("is_evidence")
+            verdict = "relevant" if ev is True else ("irrelevant" if ev is False else "unclear")
+        is_evidence = verdict == "relevant"
+
         return {
             "numeric_score": score,
             "observations": str(payload.get("observations") or ""),
             "confidence": confidence,
             "key_findings": [str(f) for f in findings],
             "analyzed_kind": kind,
+            "is_evidence": is_evidence,
+            "verdict": verdict,
+            "reason": str(payload.get("reason") or payload.get("observations") or "").strip(),
         }
 
     def analyze_all_responses(self, responses: list[Dict]) -> Dict:

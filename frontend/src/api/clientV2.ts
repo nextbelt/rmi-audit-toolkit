@@ -462,6 +462,11 @@ export const v2API = {
     size_bytes: number;
     uploaded_at: string;
     evidence_status: string | null;
+    ai_verdict: "relevant" | "irrelevant" | "unclear";
+    ai_reason: string | null;
+    ai_suggested_score: number | null;
+    ai_confidence: string | null;
+    accepted: boolean;
   }> => {
     const fd = new FormData();
     fd.append("file", file);

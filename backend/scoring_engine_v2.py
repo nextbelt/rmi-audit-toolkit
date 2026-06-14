@@ -520,9 +520,13 @@ class ScoringEngineV2:
             ResponseV2.assessment_id == assessment_id,
             ResponseV2.is_na == False,
         ).count()
+        # Evidence still missing (awaiting) OR rejected by the AI relevance gate
+        # (e.g. an unrelated file) both leave the claim unsupported.
         evidence_blocked = self.db.query(ResponseV2).filter(
             ResponseV2.assessment_id == assessment_id,
-            ResponseV2.evidence_status == EvidenceStatus.PENDING_EVIDENCE,
+            ResponseV2.evidence_status.in_([
+                EvidenceStatus.PENDING_EVIDENCE, EvidenceStatus.REJECTED,
+            ]),
         ).count()
         if total_responses > 0:
             confidence -= (evidence_blocked / total_responses) * 0.30

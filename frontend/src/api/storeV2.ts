@@ -102,7 +102,11 @@ interface V2State {
   upgradeMode: (assessmentId: number, newMode: string) => Promise<void>;
 
   // Evidence
-  uploadEvidence: (assessmentId: number, questionId: number, file: File) => Promise<void>;
+  uploadEvidence: (assessmentId: number, questionId: number, file: File) => Promise<{
+    accepted: boolean;
+    ai_verdict: 'relevant' | 'irrelevant' | 'unclear';
+    ai_reason: string | null;
+  }>;
   deleteEvidence: (assessmentId: number, questionId: number) => Promise<void>;
   analyzeEvidence: (assessmentId: number, questionId: number) => Promise<AIEvidenceAnalysis>;
 
@@ -313,10 +317,20 @@ export const useV2Store = create<V2State>((set, get) => ({
               size_bytes: meta.size_bytes,
               uploaded_at: meta.uploaded_at,
             },
-            ai_analysis: null, // stale once new file is uploaded
+            // The upload already ran the AI gate — surface its read immediately.
+            ai_analysis:
+              meta.ai_suggested_score != null || meta.ai_reason
+                ? {
+                    suggested_score: meta.ai_suggested_score,
+                    observations: meta.ai_reason,
+                    confidence: meta.ai_confidence,
+                    analyzed_at: new Date().toISOString(),
+                  }
+                : null,
           },
         },
       }));
+      return { accepted: meta.accepted, ai_verdict: meta.ai_verdict, ai_reason: meta.ai_reason };
     } catch (e: any) {
       set({ error: e?.response?.data?.detail || e.message || 'Failed to upload evidence' });
       throw e;
