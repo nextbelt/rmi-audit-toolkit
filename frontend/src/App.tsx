@@ -18,7 +18,14 @@ const Settings = lazy(() => import('./views/Settings').then((m) => ({ default: m
 
 // ── Protected route wrapper ────────────────────────────────────────────────
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, initialized } = useAuthStore();
+  if (!initialized) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <div className="spinner" />
+      </div>
+    );
+  }
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return <>{children}</>;
 };
@@ -129,13 +136,11 @@ const Page: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 );
 
 function App() {
-  const { fetchCurrentUser, isAuthenticated } = useAuthStore();
+  const init = useAuthStore((s) => s.init);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchCurrentUser();
-    }
-  }, [isAuthenticated]);
+    init();
+  }, [init]);
 
   return (
     <BrowserRouter

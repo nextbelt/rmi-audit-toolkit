@@ -76,6 +76,10 @@ class Settings(BaseSettings):
     # CORS
     FRONTEND_URL: str = "http://localhost:3000"
 
+    # Auth: only this email domain may access the app (Supabase signups are also
+    # locked to it via a DB trigger). Override per environment if needed.
+    ALLOWED_EMAIL_DOMAIN: str = "next-belt.com"
+
     # OpenAI
     OPENAI_API_KEY: Optional[str] = None
 

@@ -3,6 +3,7 @@
  * Assessment, scoring, report, and CMMS calls live in clientV2.ts.
  */
 import axios from 'axios';
+import { supabase } from './supabase';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -64,8 +65,10 @@ export const syncPendingRequests = async () => {
   writeQueue(remaining);
 };
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
+api.interceptors.request.use(async (config) => {
+  // Attach the current Supabase access token (auto-refreshed by the client).
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -76,7 +79,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('access_token');
+      void supabase.auth.signOut();
       // Avoid redirect loops on the login page itself
       if (!window.location.pathname.startsWith('/login')) {
         window.location.href = '/login';
@@ -104,31 +107,10 @@ export default api;
 // ────────────────────────────────────────────────────────────────
 
 export const authAPI = {
-  login: async (username: string, password: string) => {
-    const body = new URLSearchParams();
-    body.append('username', username);
-    body.append('password', password);
-    const r = await api.post('/token', body, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    });
-    return r.data;
-  },
-
+  // Auth itself is handled by Supabase (see api/supabase.ts + api/store.ts).
+  // This just resolves the app profile/role for the signed-in Supabase user.
   getCurrentUser: async () => {
     const r = await api.get('/users/me');
-    return r.data;
-  },
-
-  requestPasswordReset: async (email: string) => {
-    const r = await api.post('/password-reset/request', { email });
-    return r.data as { ok: boolean; debug_token?: string };
-  },
-
-  confirmPasswordReset: async (token: string, newPassword: string) => {
-    const r = await api.post('/password-reset/confirm', {
-      token,
-      new_password: newPassword,
-    });
     return r.data;
   },
 };

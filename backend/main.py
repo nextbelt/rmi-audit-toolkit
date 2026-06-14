@@ -42,7 +42,7 @@ from auth import get_current_user, oauth2_scheme  # noqa: F401 (oauth2_scheme re
 from config import assert_production_secrets, settings
 from database import engine, get_db, init_db
 from models import Report, User
-from models_extra import PasswordResetTokenUsage
+from models_extra import AuditLog, PasswordResetTokenUsage
 from rbac import get_v2_assessment_or_403
 import storage
 from security_utils import (
@@ -589,6 +589,44 @@ async def update_user(
         details=changed,
     )
     return {"message": "User updated", "changes": changed}
+
+
+# ---------------------------------------------------------------------------
+# Audit log (admin only)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/audit")
+async def list_audit_log(
+    skip: int = 0,
+    limit: int = 100,
+    action: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the append-only audit trail (most recent first). Admin only."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    limit = max(1, min(limit, 500))
+    query = db.query(AuditLog)
+    if action:
+        query = query.filter(AuditLog.action == action)
+    rows = query.order_by(AuditLog.occurred_at.desc()).offset(max(skip, 0)).limit(limit).all()
+
+    return [
+        {
+            "id": r.id,
+            "occurred_at": r.occurred_at.isoformat() if r.occurred_at else None,
+            "actor_email": r.actor_email,
+            "action": r.action,
+            "target_type": r.target_type,
+            "target_id": r.target_id,
+            "ip_address": r.ip_address,
+            "details": r.details,
+        }
+        for r in rows
+    ]
 
 
 if __name__ == "__main__":

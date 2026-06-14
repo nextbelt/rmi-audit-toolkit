@@ -19,6 +19,8 @@ if BACKEND_DIR not in sys.path:
 os.environ.setdefault("SECRET_KEY", "test-only-key-with-sufficient-length-for-checks-0123456789")
 os.environ.setdefault("ENVIRONMENT", "development")
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# Test fixtures create @example.com users; allow that domain in tests.
+os.environ.setdefault("ALLOWED_EMAIL_DOMAIN", "example.com")
 
 
 from fastapi.testclient import TestClient
