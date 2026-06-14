@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 import bcrypt
@@ -88,17 +89,24 @@ def initialize_database() -> None:
     except Exception as exc:
         log.warning("Practice seeding skipped: %s", exc)
 
-    try:
-        from seed_benchmark import seed_benchmark_peers
-
-        db3 = SessionLocal()
+    # Anonymized "peer" assessments are DEMO data only. They surface as empty,
+    # response-less assessments in the UI and would inject a fabricated peer mean
+    # into real client reports. Real benchmark peers should accrue from real
+    # assessments. Only seed them when explicitly requested (SEED_DEMO_DATA=true).
+    if os.getenv("SEED_DEMO_DATA", "").strip().lower() in ("1", "true", "yes"):
         try:
-            log.info("Seeding benchmark peer data…")
-            seed_benchmark_peers(db3)
-        finally:
-            db3.close()
-    except Exception as exc:
-        log.warning("Benchmark seeding skipped: %s", exc)
+            from seed_benchmark import seed_benchmark_peers
+
+            db3 = SessionLocal()
+            try:
+                log.info("SEED_DEMO_DATA set — seeding benchmark peer data…")
+                seed_benchmark_peers(db3)
+            finally:
+                db3.close()
+        except Exception as exc:
+            log.warning("Benchmark seeding skipped: %s", exc)
+    else:
+        log.info("Skipping demo benchmark peers (set SEED_DEMO_DATA=true to seed them).")
 
     log.info("Database initialization complete.")
 

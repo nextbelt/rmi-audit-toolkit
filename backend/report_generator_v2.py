@@ -228,6 +228,7 @@ class ReportGeneratorV2:
         if cmms_uploads:
             story += self._cmms_section(cmms_uploads, styles)
         story += self._blind_spot_section(scoring, styles)
+        story += self._priority_fixes_section(assessment_id, styles)
         story += self._roadmap_section(domain_rollup, styles)
         story += self._evidence_section(assessment_id, scoring, styles)
 
@@ -689,6 +690,108 @@ class ReportGeneratorV2:
         ]))
         story.append(t)
         return story
+
+    def _priority_fixes_section(self, assessment_id: int, st) -> list:
+        """Per-domain lowest-scored individual questions — the concrete punch list
+        that feeds the strategic roadmap. Only surfaces items below the Systematic
+        (3.0) floor; returns nothing if the site has no weak items."""
+        from models_v2 import ResponseV2, QuestionV2, Subdomain, Domain, Practice
+
+        rows = (
+            self.db.query(
+                ResponseV2.numeric_score, QuestionV2.question_code, QuestionV2.question_text,
+                QuestionV2.practice_link, Subdomain.id, Subdomain.name, Domain.code, Domain.name,
+                Domain.display_order,
+            )
+            .join(QuestionV2, ResponseV2.question_id == QuestionV2.id)
+            .join(Subdomain, QuestionV2.subdomain_id == Subdomain.id)
+            .join(Domain, Subdomain.domain_id == Domain.id)
+            .filter(
+                ResponseV2.assessment_id == assessment_id,
+                ResponseV2.numeric_score.isnot(None),
+                ResponseV2.is_na == False,      # noqa: E712
+                ResponseV2.is_draft == False,   # noqa: E712
+            )
+            .all()
+        )
+        if not rows:
+            return []
+
+        # Recommended action: prefer the question's directly-linked practice; else
+        # the most-foundational practice for that subdomain; else a generic hint.
+        plinks = {r[3] for r in rows if r[3]}
+        practice_titles: Dict[str, str] = {}
+        if plinks:
+            for p in self.db.query(Practice).filter(
+                (Practice.practice_id.in_(plinks)) | (Practice.practice_code.in_(plinks))
+            ).all():
+                if p.practice_id:
+                    practice_titles[p.practice_id] = p.title
+                if p.practice_code:
+                    practice_titles[p.practice_code] = p.title
+
+        sub_practice: Dict[int, str] = {}
+        for p in self.db.query(Practice).order_by(Practice.from_level, Practice.priority_rank).all():
+            sub_practice.setdefault(p.subdomain_id, p.title)
+
+        domains: Dict[str, dict] = {}
+        for score, qcode, qtext, plink, sdid, sdname, domcode, domname, order in rows:
+            d = domains.setdefault(domcode, {"name": domname, "order": order, "items": []})
+            fix = practice_titles.get(plink) or sub_practice.get(sdid) or f"Strengthen {sdname}"
+            d["items"].append({
+                "score": float(score), "code": qcode, "text": qtext or "",
+                "subdomain": sdname, "fix": fix,
+            })
+
+        LOW_THRESHOLD = 3.0
+        PER_DOMAIN = 3
+
+        body: list = []
+        for code in sorted(domains, key=lambda c: domains[c]["order"]):
+            d = domains[code]
+            weak = [w for w in sorted(d["items"], key=lambda x: x["score"])
+                    if w["score"] < LOW_THRESHOLD][:PER_DOMAIN]
+            if not weak:
+                continue
+            body.append(Paragraph(f"{code} — {d['name']}", st["h3"]))
+            table_rows = [["Lowest-scoring item", "Score", "Recommended action"]]
+            for w in weak:
+                text = w["text"]
+                text = (text[:78] + "…") if len(text) > 80 else text
+                label = Paragraph(f"<b>{w['code']}</b>&nbsp; {text}", st["small"])
+                fix = Paragraph(w["fix"] or f"Strengthen {w['subdomain']}", st["small"])
+                table_rows.append([label, f"{w['score']:.1f}", fix])
+            t = Table(table_rows, colWidths=[3.3 * inch, 0.7 * inch, 2.2 * inch])
+            style = [
+                ("BACKGROUND", (0, 0), (-1, 0), self.DARK),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+                ("ALIGN", (1, 0), (1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, self.BG]),
+            ]
+            for i, w in enumerate(weak, start=1):
+                style.append(("TEXTCOLOR", (1, i), (1, i), _score_color(w["score"])))
+                style.append(("FONTNAME", (1, i), (1, i), "Helvetica-Bold"))
+            t.setStyle(TableStyle(style))
+            body.append(t)
+            body.append(Spacer(1, 8))
+
+        if not body:
+            return []
+
+        return [
+            PageBreak(),
+            Paragraph("Priority Fixes — Lowest-Scoring Items", st["h2"]),
+            HRFlowable(width="100%", thickness=0.5, color=self.PRIMARY, spaceAfter=8),
+            Paragraph("The specific items dragging each domain down, weakest first — the "
+                      "fastest, most concrete wins. Pair these with the strategic roadmap "
+                      "that follows.", st["body"]),
+            Spacer(1, 10),
+        ] + body
 
     def _roadmap_section(self, domain_rollup, st) -> list:
         story = [PageBreak(), Paragraph("Strategic Roadmap (30 / 60 / 90 Day)", st["h2"]),
