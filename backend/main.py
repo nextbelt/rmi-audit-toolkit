@@ -507,6 +507,10 @@ async def generate_report(
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:  # Chromium missing / render error → fall back
         logger.warning("HTML report failed (%s); falling back to ReportLab", exc)
+        # The failed render may have left the session in an aborted transaction
+        # (e.g. a DB error mid-query); roll back so the fallback runs on a clean
+        # session instead of failing with "current transaction is aborted".
+        db.rollback()
         from report_generator_v2 import ReportGeneratorV2
         try:
             pdf_path = await run_in_threadpool(
