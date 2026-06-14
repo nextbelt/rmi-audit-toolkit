@@ -127,9 +127,12 @@ class HTMLReportRenderer:
 
         ctx = self._build_context(a)
         fonts_css = self._read(os.path.join(_TPL_DIR, "_fonts.css"))
+        serif_css = self._read(os.path.join(_TPL_DIR, "_serif.css"))
 
-        cover_html = self.env.get_template("cover.html.j2").render(fonts_css=fonts_css, **ctx)
-        body_html = self.env.get_template("report.html.j2").render(fonts_css=fonts_css, **ctx)
+        cover_html = self.env.get_template("cover.html.j2").render(
+            fonts_css=fonts_css, serif_css=serif_css, **ctx)
+        body_html = self.env.get_template("report.html.j2").render(
+            fonts_css=fonts_css, serif_css=serif_css, **ctx)
 
         filename = (
             f"RMI_Audit_Report_{_slug(a.client_name)}_{_slug(a.site_name)}_"
@@ -173,7 +176,7 @@ class HTMLReportRenderer:
                 pb.set_content(body_html, wait_until="load")
                 pb.pdf(path=tmp_body, format="Letter", print_background=True,
                        display_header_footer=True, header_template=header, footer_template=footer,
-                       margin={"top": "0.82in", "bottom": "0.6in", "left": "0.55in", "right": "0.55in"})
+                       margin={"top": "0.7in", "bottom": "0.62in", "left": "0.7in", "right": "0.7in"})
                 pb.close()
                 browser.close()
 
@@ -192,21 +195,17 @@ class HTMLReportRenderer:
                     pass
 
     def _header_template(self, ctx: dict) -> str:
-        return (
-            f'<div style="width:100%;font-family:Arial,sans-serif;font-size:7px;'
-            f'color:{SILVER};padding:0 0.55in;display:flex;justify-content:space-between;'
-            f'letter-spacing:.12em;text-transform:uppercase;">'
-            f'<span style="color:{BLUE};font-weight:700;">NextBelt</span>'
-            f'<span>Reliability Maturity Index &middot; Executive Audit</span></div>'
-        )
+        # No running header — the McKinsey-style layout keeps the top of each
+        # page clean. (Playwright requires a template when header/footer is on.)
+        return '<div style="height:0;"></div>'
 
     def _footer_template(self, ctx: dict) -> str:
+        client = (ctx.get("client") or "").replace("&", "&amp;")
         return (
-            f'<div style="width:100%;font-family:Arial,sans-serif;font-size:7px;'
-            f'color:#7C858C;padding:0 0.55in;display:flex;justify-content:space-between;">'
-            f'<span>{settings.REPORT_CONFIDENTIAL_LABEL}</span>'
-            f'<span>{settings.FIRM_NAME}</span>'
-            f'<span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span></div>'
+            f'<div style="width:100%;font-family:Georgia,\'Times New Roman\',serif;font-size:7.5px;'
+            f'color:#8A929A;padding:0 0.7in;display:flex;justify-content:space-between;align-items:baseline;">'
+            f'<span style="font-style:italic;">Reliability Maturity Index &nbsp;·&nbsp; {client}</span>'
+            f'<span class="pageNumber" style="font-variant-numeric:tabular-nums;"></span></div>'
         )
 
     # ── data ──
