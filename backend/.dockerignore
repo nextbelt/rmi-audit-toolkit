@@ -1,0 +1,49 @@
+# Keep the production image lean and free of local/dev artifacts.
+# NOTE: report_templates/ and report_assets/ are REQUIRED by the renderer and
+# are intentionally NOT excluded.
+
+# Python caches / bytecode
+__pycache__/
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Local secrets & env (prod env comes from Railway variables)
+.env
+.env.local
+.env.production
+.env.example
+
+# Local databases (prod uses Postgres)
+*.db
+*.sqlite
+*.sqlite3
+rmi_audit.db
+
+# Local runtime output / user data
+uploads/
+reports/
+*.log
+
+# Tests & tooling not needed at runtime
+tests/
+.pytest_cache/
+pytest.ini
+requirements-dev.txt
+
+# Build config not used by the Dockerfile builder
+nixpacks.toml
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker meta (avoid copying into the build context)
+Dockerfile
+.dockerignore

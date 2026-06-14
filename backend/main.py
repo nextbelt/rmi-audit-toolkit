@@ -203,17 +203,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 def _maybe_bootstrap_tables() -> None:
     """Create tables only if the DB has none — first-run local DX only.
 
-    In any real deploy, `alembic upgrade head` has already run.
+    In any real deploy, `alembic upgrade head` has already run. DB access here is
+    wrapped so a momentarily-unreachable database (e.g. Railway's private network
+    still initializing at container start) logs a warning instead of crashing the
+    process before it can serve `/healthz`.
     """
     from sqlalchemy import inspect as sa_inspect
 
-    inspector = sa_inspect(engine)
-    if not inspector.get_table_names():
-        logger.warning(
-            "Database has no tables. Bootstrapping from Base.metadata for local dev. "
-            "Run `alembic upgrade head` instead in any real deploy."
-        )
-        init_db()
+    try:
+        inspector = sa_inspect(engine)
+        if not inspector.get_table_names():
+            logger.warning(
+                "Database has no tables. Bootstrapping from Base.metadata for local dev. "
+                "Run `alembic upgrade head` instead in any real deploy."
+            )
+            init_db()
+    except Exception as e:  # noqa: BLE001 - never let a DB blip block startup
+        logger.warning("Startup table check skipped (database not reachable yet): %r", e)
 
 
 @app.on_event("startup")
