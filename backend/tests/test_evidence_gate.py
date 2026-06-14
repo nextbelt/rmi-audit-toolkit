@@ -55,6 +55,18 @@ def test_rejected_evidence_docks_confidence(db_session, make_user):
     assert conf < 1.0  # the rejected (irrelevant) evidence leaves the claim unsupported
 
 
+def test_status_for_verdict_fail_closed():
+    from api_v2 import _status_for_verdict
+    from models_v2 import EvidenceStatus
+    # Only confidently-relevant evidence is credited.
+    assert _status_for_verdict("relevant", True) == EvidenceStatus.PENDING_VERIFICATION
+    assert _status_for_verdict("irrelevant", True) == EvidenceStatus.REJECTED
+    # 'unclear' / AI outage is NOT credited — stays a confidence drag.
+    assert _status_for_verdict("unclear", True) == EvidenceStatus.PENDING_EVIDENCE
+    # Questions that don't require evidence are never gated.
+    assert _status_for_verdict("relevant", False) == EvidenceStatus.NOT_REQUIRED
+
+
 def test_valid_evidence_keeps_confidence(db_session, make_user):
     from scoring_engine_v2 import ScoringEngineV2
     from models_v2 import AssessmentMode

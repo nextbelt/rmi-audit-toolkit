@@ -221,16 +221,21 @@ export const EvidenceWidget: React.FC<EvidenceWidgetProps> = ({
               ? { bg: 'rgba(194,83,60,0.08)', bd: 'rgba(194,83,60,0.35)', fg: 'var(--danger)', icon: '⚠', label: 'Rejected — not valid evidence' }
               : v === 'relevant'
               ? { bg: 'rgba(13,138,94,0.08)', bd: 'rgba(13,138,94,0.30)', fg: 'var(--ok)', icon: '✓', label: 'Accepted — relevant evidence' }
-              : { bg: 'rgba(184,134,11,0.08)', bd: 'rgba(184,134,11,0.30)', fg: 'var(--warn)', icon: '•', label: 'Saved — flagged for manual review' };
+              : { bg: 'rgba(184,134,11,0.08)', bd: 'rgba(184,134,11,0.35)', fg: 'var(--warn)', icon: '⏸', label: 'Not counted — could not verify' };
           return (
             <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 6, background: tone.bg, border: `1px solid ${tone.bd}`, fontSize: 11.5 }}>
-              <div style={{ color: tone.fg, fontWeight: 700 }}>{tone.icon} AI evidence check · {tone.label}</div>
+              <div style={{ color: tone.fg, fontWeight: 700 }}>{tone.icon} Reliability reviewer · {tone.label}</div>
               {verdict.ai_reason && (
                 <div style={{ marginTop: 3, color: 'var(--ink-2)', lineHeight: 1.45 }}>{verdict.ai_reason}</div>
               )}
               {v === 'irrelevant' && (
                 <div style={{ marginTop: 3, color: 'var(--muted)' }}>
                   This file does not count toward scoring confidence. Upload evidence that actually addresses the question.
+                </div>
+              )}
+              {v === 'unclear' && (
+                <div style={{ marginTop: 3, color: 'var(--muted)' }}>
+                  It does not count toward confidence yet. Re-run “Analyze with AI”, or replace it with clearer evidence.
                 </div>
               )}
             </div>

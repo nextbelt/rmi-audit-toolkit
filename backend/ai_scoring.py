@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 import openai
 
 from config import settings
+from reliability_expert import EXPERT_SYSTEM, FRAMEWORK_BRIEF, evidence_examples_for
 
 logger = logging.getLogger(__name__)
 
@@ -131,14 +132,8 @@ Format your response EXACTLY as JSON:
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",  # Fast and cost-effective
                 messages=[
-                    {
-                        "role": "system",
-                        "content": "You are an expert RMI auditor. Respond ONLY with valid JSON."
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt
-                    }
+                    {"role": "system", "content": EXPERT_SYSTEM + " Respond ONLY with valid JSON."},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.3,  # Lower temperature for more consistent scoring
                 max_tokens=500,
@@ -307,9 +302,10 @@ Format your response EXACTLY as JSON:
         b64 = base64.b64encode(file_bytes).decode("ascii")
         data_url = f"data:{mime};base64,{b64}"
 
+        context = f"{FRAMEWORK_BRIEF}\n\n{evidence_examples_for(question_code)}".strip()
         user_prompt = (
-            f"You are an RMI (Reliability Maturity) auditor reviewing a file a client "
-            f"uploaded as EVIDENCE for a maturity question.\n\n"
+            f"{context}\n\n"
+            f"A client uploaded this image as EVIDENCE for the maturity question below.\n\n"
             f"**Question ({question_code}):** {question_text}{rubric_block}{notes_block}\n\n"
             "STEP 1 — GATEKEEP. Decide whether this image is genuine, relevant evidence for "
             "THIS question. Valid evidence looks like: equipment/asset photos, maintenance "
@@ -332,13 +328,7 @@ Format your response EXACTLY as JSON:
             response = openai.chat.completions.create(
                 model="gpt-4o",
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an expert RMI auditor analyzing photo/screenshot "
-                            "evidence. Respond ONLY with valid JSON."
-                        ),
-                    },
+                    {"role": "system", "content": EXPERT_SYSTEM + " Respond ONLY with valid JSON."},
                     {
                         "role": "user",
                         "content": [
@@ -374,9 +364,10 @@ Format your response EXACTLY as JSON:
         extracted_text: str,
         analyzed_kind: str,
     ) -> Dict[str, Any]:
+        context = f"{FRAMEWORK_BRIEF}\n\n{evidence_examples_for(question_code)}".strip()
         prompt = (
-            f"You are an RMI (Reliability Maturity) auditor reviewing a document a client "
-            f"uploaded as EVIDENCE for a maturity question.\n\n"
+            f"{context}\n\n"
+            f"A client uploaded this document as EVIDENCE for the maturity question below.\n\n"
             f"**Question ({question_code}):** {question_text}{rubric_block}{notes_block}\n\n"
             f"**Extracted document text:**\n{extracted_text}\n\n"
             "STEP 1 — GATEKEEP. Decide whether this document is genuine, relevant evidence for "
@@ -397,13 +388,7 @@ Format your response EXACTLY as JSON:
             response = openai.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an expert RMI auditor analyzing document evidence. "
-                            "Respond ONLY with valid JSON."
-                        ),
-                    },
+                    {"role": "system", "content": EXPERT_SYSTEM + " Respond ONLY with valid JSON."},
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,

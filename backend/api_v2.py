@@ -685,6 +685,24 @@ def _get_response_or_404(
     return response
 
 
+def _status_for_verdict(verdict: str, evidence_required: bool) -> EvidenceStatus:
+    """Map an AI relevance verdict to an evidence status — fail-CLOSED on credit.
+
+    Only confidently-relevant, AI-verified evidence is credited (pending
+    verification). Irrelevant is rejected. 'unclear' or an AI outage is NOT
+    credited — it stays 'awaiting evidence' (a confidence drag) so junk can
+    never buy confidence while the reviewer is unavailable; the file is kept and
+    can be re-checked with the Analyze action.
+    """
+    if not evidence_required:
+        return EvidenceStatus.NOT_REQUIRED
+    if verdict == "relevant":
+        return EvidenceStatus.PENDING_VERIFICATION
+    if verdict == "irrelevant":
+        return EvidenceStatus.REJECTED
+    return EvidenceStatus.PENDING_EVIDENCE
+
+
 def _run_evidence_gate(question, file_bytes: bytes, mime: Optional[str],
                        filename: Optional[str]) -> dict:
     """Review an uploaded evidence file with the AI relevance gate.
@@ -761,16 +779,9 @@ async def upload_evidence(
     response.ai_confidence = gate.get("confidence")
     response.ai_analyzed_at = datetime.utcnow()
 
-    requires_evidence = bool(question and question.evidence_required)
-    if requires_evidence:
-        # Irrelevant evidence does NOT clear the requirement — it stays a
-        # confidence drag (REJECTED). Relevant or unclear advances to pending
-        # verification (a human can still confirm).
-        response.evidence_status = (
-            EvidenceStatus.REJECTED if verdict == "irrelevant"
-            else EvidenceStatus.PENDING_VERIFICATION
-        )
-    # Not-required questions keep their resting status; the AI read is still saved.
+    response.evidence_status = _status_for_verdict(
+        verdict, bool(question and question.evidence_required)
+    )
 
     db.commit()
     db.refresh(response)
@@ -918,10 +929,15 @@ def analyze_evidence(
         existing_notes=response.evidence_notes,
     )
 
+    verdict = str(result.get("verdict") or "unclear").lower()
     response.ai_suggested_score = result.get("numeric_score")
-    response.ai_observations = result.get("observations")
+    response.ai_observations = result.get("reason") or result.get("observations")
     response.ai_confidence = result.get("confidence")
     response.ai_analyzed_at = datetime.utcnow()
+    # Re-running the expert review re-applies the verdict, so a previously
+    # 'unclear' (uncredited) file can be credited once verified relevant — and
+    # junk that slipped through is rejected.
+    response.evidence_status = _status_for_verdict(verdict, bool(question.evidence_required))
     db.commit()
 
     audit.record(
@@ -935,16 +951,20 @@ def analyze_evidence(
             "question_id": question_id,
             "suggested_score": result.get("numeric_score"),
             "confidence": result.get("confidence"),
+            "ai_verdict": verdict,
         },
     )
 
     return {
         "suggested_score": result.get("numeric_score"),
-        "observations": result.get("observations"),
+        "observations": result.get("reason") or result.get("observations"),
         "confidence": result.get("confidence"),
         "key_findings": result.get("key_findings", []),
         "analyzed_kind": result.get("analyzed_kind"),
         "analyzed_at": response.ai_analyzed_at.isoformat(),
+        "ai_verdict": verdict,
+        "accepted": verdict != "irrelevant",
+        "evidence_status": response.evidence_status.value if response.evidence_status else None,
     }
 
 
