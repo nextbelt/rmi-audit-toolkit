@@ -18,6 +18,15 @@ const ROLE_OPTIONS = [
   "RELIABILITY_ENGINEER",
 ];
 
+// Mode tiers are one-way upgrades (free → paid → premium). Existing answers are
+// always preserved; upgrading just widens the question set.
+const MODE_ORDER = ["quickscan", "standard", "deepdive"] as const;
+const MODE_META: Record<string, { label: string; scope: string }> = {
+  quickscan: { label: "QuickScan", scope: "15 questions" },
+  standard: { label: "Standard", scope: "~75 questions" },
+  deepdive: { label: "DeepDive", scope: "150 questions" },
+};
+
 export const AssessmentV2Detail: React.FC = () => {
   const { assessmentId } = useParams<{ assessmentId: string }>();
   const navigate = useNavigate();
@@ -33,6 +42,7 @@ export const AssessmentV2Detail: React.FC = () => {
     loadProgress,
     loadResponses,
     submitResponse,
+    upgradeMode,
     calculateScores,
     scoringResult,
     scoringLoading,
@@ -195,6 +205,28 @@ export const AssessmentV2Detail: React.FC = () => {
     setActiveTab("scores");
   };
 
+  const [modeChanging, setModeChanging] = useState(false);
+  const handleChangeMode = async (newMode: string) => {
+    const cur = MODE_META[currentAssessment?.assessment_mode || ""]?.label || "current";
+    const next = MODE_META[newMode]?.label || newMode;
+    if (
+      !window.confirm(
+        `Upgrade this assessment from ${cur} to ${next}?\n\n` +
+          `Your existing answers are preserved — upgrading only adds more questions ` +
+          `(${MODE_META[newMode]?.scope}).`
+      )
+    )
+      return;
+    setModeChanging(true);
+    try {
+      await upgradeMode(id, newMode);
+      // Refresh in place so the wider question set appears without leaving the page.
+      await Promise.all([loadQuestions(id, selectedRole), loadProgress(id)]);
+    } finally {
+      setModeChanging(false);
+    }
+  };
+
   const currentQuestionsAll =
     currentDomain && currentSubdomain
       ? questionTree[currentDomain]?.[currentSubdomain] || []
@@ -292,8 +324,46 @@ export const AssessmentV2Detail: React.FC = () => {
               <span>{currentAssessment.site_name}</span>
               <span className="dot" />
               <span className="mono" style={{ textTransform: "uppercase" }}>
-                {currentAssessment.assessment_mode}
+                {MODE_META[currentAssessment.assessment_mode]?.label ||
+                  currentAssessment.assessment_mode}
               </span>
+              {(() => {
+                const curIdx = MODE_ORDER.indexOf(
+                  currentAssessment.assessment_mode as (typeof MODE_ORDER)[number]
+                );
+                const upgrades = MODE_ORDER.slice(curIdx + 1);
+                if (currentAssessment.finalized_at || upgrades.length === 0) return null;
+                return (
+                  <>
+                    <span className="dot" />
+                    <select
+                      aria-label="Change assessment mode"
+                      className="field-input"
+                      value=""
+                      disabled={modeChanging}
+                      onChange={(e) => {
+                        if (e.target.value) handleChangeMode(e.target.value);
+                      }}
+                      style={{
+                        width: "auto",
+                        padding: "3px 8px",
+                        fontSize: 11.5,
+                        height: "auto",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="">
+                        {modeChanging ? "Upgrading…" : "Upgrade mode…"}
+                      </option>
+                      {upgrades.map((m) => (
+                        <option key={m} value={m}>
+                          {MODE_META[m].label} ({MODE_META[m].scope})
+                        </option>
+                      ))}
+                    </select>
+                  </>
+                );
+              })()}
               {currentAssessment.industry_module && (
                 <>
                   <span className="dot" />

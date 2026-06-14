@@ -141,7 +141,12 @@ def seed_question_bank_v2(db: Session) -> int:
                     domain=DOMAIN_ENUM_MAP[domain_code],
                     subdomain_id=sd_id,
                     target_role=ROLE_MAP.get(q.get("target_role"), TargetRoleV2.TECHNICIAN),
-                    assessment_modes=json.dumps(q.get("assessment_mode", ["standard", "deepdive"])),
+                    # Store a real JSON array (the column is JSON). An older
+                    # revision json.dumps'd this into a string, which made the
+                    # SQL `contains` filter fail on Postgres; routing now parses
+                    # modes in Python so both encodings work, but new rows should
+                    # be clean arrays.
+                    assessment_modes=q.get("assessment_mode", ["standard", "deepdive"]),
                     weight=q.get("weight", 1.0),
                     is_critical=q.get("is_critical", False),
                     evidence_required=q.get("evidence_required", False),

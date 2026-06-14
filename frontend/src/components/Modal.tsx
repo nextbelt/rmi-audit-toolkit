@@ -1,5 +1,13 @@
 import React, { ReactNode, useEffect, useId, useRef } from 'react';
 
+// Keep a stable reference to the latest callback so effects can call it without
+// listing it as a dependency (which would re-run them on every parent render).
+function useEvent<T extends (...args: any[]) => any>(fn: T): T {
+  const ref = useRef(fn);
+  ref.current = fn;
+  return useRef(((...args: any[]) => ref.current(...args)) as T).current;
+}
+
 interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -20,6 +28,11 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // Stable handle so the focus effect depends only on `isOpen` — otherwise an
+  // inline `onClose` from the parent changes identity on every keystroke, re-runs
+  // this effect, and yanks focus back to the first field (typing one letter at a
+  // time). See the create-assessment form.
+  const onCloseStable = useEvent(onClose);
 
   // Focus management, Escape-to-close, Tab trap, and background scroll lock.
   useEffect(() => {
@@ -37,7 +50,7 @@ export const Modal: React.FC<ModalProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseStable();
         return;
       }
       if (e.key === 'Tab' && node) {
@@ -61,7 +74,7 @@ export const Modal: React.FC<ModalProps> = ({
       document.body.style.overflow = prevOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

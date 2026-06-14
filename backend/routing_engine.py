@@ -71,33 +71,56 @@ class RoutingEngine:
     #  QuickScan (15 questions)
     # ─────────────────────────────────────────
 
-    def _route_quickscan(self) -> List[Dict]:
+    # ── Mode membership (robust to JSON-column quirks) ──
+    @staticmethod
+    def _modes_of(q: QuestionV2) -> set:
+        """Return the lowercase mode tags for a question.
+
+        ``assessment_modes`` has historically been written either as a JSON array
+        or as a JSON-encoded *string* (an older seed double-encoded it with
+        ``json.dumps``). Parse both here so mode filtering is correct regardless
+        of how the row was stored — and so routing never depends on a
+        DB-specific JSON ``contains`` operator (which raises on a Postgres
+        ``json`` column: "operator does not exist: json ~~ text").
         """
-        Select 1 question per subdomain — the one tagged with quickscan mode,
-        highest weight, and is_critical=True preference.
+        modes = q.assessment_modes
+        if isinstance(modes, str):
+            try:
+                modes = json.loads(modes)
+            except (json.JSONDecodeError, TypeError):
+                modes = [modes]
+        if isinstance(modes, str):
+            modes = [modes]
+        if not isinstance(modes, (list, tuple, set)):
+            modes = []
+        return {str(m).strip().lower() for m in modes}
+
+    def _subdomain_candidates(self, sd_id: int) -> List[QuestionV2]:
+        """Active questions for a subdomain, best-first (critical, then weight)."""
+        return (
+            self.db.query(QuestionV2)
+            .filter(QuestionV2.subdomain_id == sd_id, QuestionV2.is_active == True)
+            .order_by(
+                QuestionV2.is_critical.desc(),
+                QuestionV2.weight.desc(),
+                QuestionV2.question_code,
+            )
+            .all()
+        )
+
+    def _route_quickscan(self) -> List[Dict]:
+        """One question per subdomain: the quickscan-tagged one (critical /
+        highest-weight first). Falls back to the top question when a subdomain
+        has none explicitly tagged, so QuickScan always covers all 15 subdomains.
         """
         subdomains = self.db.query(Subdomain).order_by(Subdomain.display_order).all()
         questions = []
 
         for sd in subdomains:
-            # Get all quickscan-eligible questions for this subdomain
-            candidates = (
-                self.db.query(QuestionV2)
-                .filter(
-                    QuestionV2.subdomain_id == sd.id,
-                    QuestionV2.is_active == True,
-                    QuestionV2.assessment_modes.contains("quickscan"),
-                )
-                .order_by(
-                    QuestionV2.is_critical.desc(),
-                    QuestionV2.weight.desc(),
-                    QuestionV2.question_code,
-                )
-                .limit(self.QUICKSCAN_PER_SUBDOMAIN)
-                .all()
-            )
-
-            for q in candidates:
+            candidates = self._subdomain_candidates(sd.id)
+            tagged = [q for q in candidates if "quickscan" in self._modes_of(q)]
+            chosen = (tagged or candidates)[: self.QUICKSCAN_PER_SUBDOMAIN]
+            for q in chosen:
                 questions.append(self._format_question(q, sd))
 
         return questions
@@ -118,48 +141,25 @@ class RoutingEngine:
         questions = []
 
         for sd in subdomains:
-            base_query = (
-                self.db.query(QuestionV2)
-                .filter(
-                    QuestionV2.subdomain_id == sd.id,
-                    QuestionV2.is_active == True,
-                    QuestionV2.assessment_modes.contains("standard"),
-                )
-            )
+            candidates = self._subdomain_candidates(sd.id)
+            standard = [q for q in candidates if "standard" in self._modes_of(q)]
 
-            # Critical questions are always included
-            critical = base_query.filter(QuestionV2.is_critical == True).all()
+            # Critical standard questions are always included.
+            critical = [q for q in standard if q.is_critical]
+            non_critical = [q for q in standard if not q.is_critical]
+            if respondent_role is not None:
+                non_critical = [q for q in non_critical if q.target_role == respondent_role]
 
-            # Non-critical, filtered by role if specified, sorted by weight
-            nc_query = base_query.filter(QuestionV2.is_critical == False)
-            if respondent_role:
-                nc_query = nc_query.filter(QuestionV2.target_role == respondent_role)
-            non_critical = (
-                nc_query
-                .order_by(QuestionV2.weight.desc(), QuestionV2.question_code)
-                .all()
-            )
-
-            # Combine: all critical + fill to max
             selected = list(critical)
             remaining_slots = self.STANDARD_MAX_PER_SUBDOMAIN - len(selected)
-            selected.extend(non_critical[:max(remaining_slots, 0)])
+            if remaining_slots > 0:
+                selected.extend(non_critical[:remaining_slots])
 
-            # Ensure minimum
+            # Ensure a per-subdomain minimum by back-filling from the wider pool.
             if len(selected) < self.STANDARD_MIN_PER_SUBDOMAIN:
-                # Add more from deepdive-only pool
-                deepdive_extras = (
-                    self.db.query(QuestionV2)
-                    .filter(
-                        QuestionV2.subdomain_id == sd.id,
-                        QuestionV2.is_active == True,
-                        ~QuestionV2.id.in_([q.id for q in selected]),
-                    )
-                    .order_by(QuestionV2.weight.desc())
-                    .limit(self.STANDARD_MIN_PER_SUBDOMAIN - len(selected))
-                    .all()
-                )
-                selected.extend(deepdive_extras)
+                chosen_ids = {q.id for q in selected}
+                extras = [q for q in candidates if q.id not in chosen_ids]
+                selected.extend(extras[: self.STANDARD_MIN_PER_SUBDOMAIN - len(selected)])
 
             for q in selected:
                 questions.append(self._format_question(q, sd))
