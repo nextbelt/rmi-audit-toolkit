@@ -58,6 +58,23 @@ a { color: var(--blue); text-decoration: none; }
 .stat .k { font-size: 9pt; color: var(--mute); margin-top: 7px; max-width: 1.7in; line-height: 1.4; }
 .stat .k b { color: var(--ink); }
 
+/* ── Maturity ladder ── */
+.ladder { margin: 6px 0 2px; }
+.ladder .track { position: relative; height: 13px; background: #ECEFF2; border-radius: 999px; }
+.ladder .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
+.ladder .mk { position: absolute; top: -6px; bottom: -6px; width: 1.5px; background: #8A98A6; }
+.ladder .mk .t { position: absolute; top: -15px; transform: translateX(-50%); font-size: 7.6pt; color: var(--mute);
+  white-space: nowrap; letter-spacing: .02em; }
+.ladder .pin { position: absolute; top: -25px; transform: translateX(-50%); text-align: center; }
+.ladder .pin .v { font-family: 'Playfair Display', Georgia, serif; font-weight: 800; font-size: 13pt; color: var(--ink); line-height: 1; }
+.ladder .pin .arw { display: block; width: 0; height: 0; margin: 2px auto 0; border-left: 5px solid transparent;
+  border-right: 5px solid transparent; border-top: 6px solid var(--ink); }
+.ladder .scale { display: flex; justify-content: space-between; margin-top: 18px; font-size: 7.8pt; color: var(--mute); }
+.ladder .scale span { flex: 1; text-align: center; }
+.ladder .scale span:first-child { text-align: left; }
+.ladder .scale span:last-child { text-align: right; }
+.ladder .scale b { display: block; color: var(--ink); font-weight: 700; font-size: 8.6pt; }
+
 /* ── Exhibit framing ── */
 .exhibit { margin: 6px 0 4px; }
 .exhibit .lab { font-size: 9pt; color: var(--mute); }
@@ -191,11 +208,27 @@ tbody td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-2); vert
     {{ '%.2f'|format(overall) if overall is not none else 'N/A' }} of 5.0&mdash;{% if overall_level.n %}Level {{ overall_level.n }}, {{ overall_level.label|lower }} maturity{% else %}not yet scored{% endif %}.
     {% if strongest and weakest %}{{ strongest.name }} is the strongest domain; {{ weakest.name|lower }} is the clearest drag on the score and the highest-leverage place to start.{% endif %}</p>
 
+  {% if overall is not none %}
+  <div class="spacer"></div>
+  <div class="ladder avoid">
+    <div class="track">
+      <div class="fill" style="width: {{ (overall/5*100)|round(1) }}%; background: {{ overall_level.color }};"></div>
+      <div class="mk" style="left: 60%;"><span class="t">3.0 floor</span></div>
+      <div class="mk" style="left: 80%;"><span class="t">4.0 target</span></div>
+      <div class="pin" style="left: {{ (overall/5*100)|round(1) }}%;"><span class="v">{{ '%.2f'|format(overall) }}</span><span class="arw"></span></div>
+    </div>
+    <div class="scale">
+      <span><b>1</b> Reactive</span><span><b>2</b> Emerging</span><span><b>3</b> Systematic</span><span><b>4</b> Proactive</span><span><b>5</b> World-class</span>
+    </div>
+  </div>
+  <p class="mute" style="font-size: 9pt; margin-top: 16px;">Maturity is scored 1–5 and measured against <b>world-class (5.0)</b>. The <b>3.0</b> mark is the systematic floor&mdash;the ISO 55001-aligned minimum where practices are documented and repeatable; <b>4.0</b> is the recommended near-term target. {{ site }} sits <b>{{ '%.2f'|format(overall_gap) }} below world-class</b>{% if below_floor %} with <b>{{ below_floor }} of {{ domains|length }}</b> domains still under the systematic floor{% endif %}.</p>
+  {% endif %}
+
   <div class="stats">
-    <div class="stat"><div class="v">{{ '%.2f'|format(overall) if overall is not none else '—' }}<span class="u"> / 5</span></div><div class="k"><b>Overall RMI</b> — {{ overall_level.label|lower }}</div></div>
+    <div class="stat"><div class="v">{{ '%.2f'|format(overall) if overall is not none else '—' }}<span class="u"> / 5</span></div><div class="k"><b>Overall RMI</b> — {{ overall_level.label|lower }}{% if confidence_band[0] is not none %} · band {{ '%.1f'|format(confidence_band[0]) }}–{{ '%.1f'|format(confidence_band[1]) }}{% endif %}</div></div>
+    <div class="stat"><div class="v">{{ '%.2f'|format(overall_gap) if overall_gap is not none else '—' }}</div><div class="k"><b>Gap to world-class</b> — points to 5.0</div></div>
     <div class="stat"><div class="v">{{ confidence ~ '%' if confidence is not none else '—' }}</div><div class="k"><b>Scoring confidence</b> — evidence support</div></div>
     <div class="stat"><div class="v">{{ iso_readiness ~ '%' if iso_readiness is not none else '—' }}</div><div class="k"><b>ISO 55001 readiness</b> — at/above the 3.0 floor</div></div>
-    <div class="stat"><div class="v">{{ below_target }}</div><div class="k"><b>of {{ domains|length }} domains</b> below the 3.0 target</div></div>
   </div>
 
   <div class="spacer"></div>
@@ -218,24 +251,24 @@ tbody td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-2); vert
 
   <div class="exhibit-dark avoid">
     <div class="lab">Exhibit 1 · The reliability maturity index</div>
-    <div class="hl">Domain maturity against the 3.0 “systematic” target</div>
-    <div class="sub">Each domain scored 1–5 and rolled up from its three subdomains. The vertical marker is the 3.0 floor for ISO 55001-aligned, systematic practice.</div>
+    <div class="hl">Each domain&rsquo;s distance to world-class</div>
+    <div class="sub">Domains scored 1–5 and rolled up from three subdomains each. The full bar is world-class (5.0); the markers are the <b style="color:#cfe0f4">3.0</b> systematic floor and the <b style="color:#cfe0f4">4.0</b> proactive target. The empty bar is the headroom that remains.</div>
     <div class="bars">
       {% for d in domains %}
       <div class="bar">
         <div class="lab2"><span class="c">{{ d.code }}</span>{{ d.name }}</div>
-        <div class="track"><div class="fill" style="width: {{ ((d.score or 0)/5*100)|round(1) }}%; background: {{ d.level.color }};"></div><div class="tgt" style="left: 60%;"></div></div>
+        <div class="track"><div class="fill" style="width: {{ ((d.score or 0)/5*100)|round(1) }}%; background: {{ d.level.color }};"></div><div class="tgt" style="left: 60%;"></div><div class="tgt" style="left: 80%; background: rgba(255,255,255,0.32);"></div></div>
         <div class="val" style="color: {{ d.level.color }};">{{ '%.2f'|format(d.score) if d.score is not none else '—' }}</div>
       </div>
       {% endfor %}
     </div>
     <div class="darkstats">
       <div><div class="v">{{ '%.2f'|format(overall) if overall is not none else '—' }}<span class="u"> / 5</span></div><div class="k">Overall RMI</div></div>
-      <div><div class="v">{{ overall_level.n if overall_level.n else '—' }}</div><div class="k">{{ overall_level.label }}</div></div>
+      <div><div class="v">{{ '%.2f'|format(overall_gap) if overall_gap is not none else '—' }}</div><div class="k">To world-class</div></div>
       {% if confidence is not none %}<div><div class="v">{{ confidence }}<span class="u">%</span></div><div class="k">Confidence</div></div>{% endif %}
       {% if peer_mean %}<div><div class="v">{{ '%.1f'|format(peer_mean) }}</div><div class="k">Peer mean</div></div>{% endif %}
     </div>
-    <div class="src"><b>Scoring:</b> 1 Reactive · 2 Emerging · 3 Systematic · 4 Proactive · 5 Prescriptive. Role-weighted interview responses, evidence-verified. &nbsp; <b>{{ firm.name }}</b></div>
+    <div class="src"><b>Bands:</b> 1 Reactive · 2 Emerging · 3 Systematic · 4 Proactive · 5 World-class. Role-weighted interview responses, evidence-verified.{% if not peer_mean %} Peer benchmarking unlocks once comparable sites are assessed.{% endif %} &nbsp; <b>{{ firm.name }}</b></div>
   </div>
 
   <div class="spacer"></div>
@@ -244,20 +277,23 @@ tbody td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-2); vert
     <div class="lab">Exhibit 2</div>
     <div class="hl">Domain detail and maturity band</div>
     <table class="avoid">
-      <thead><tr><th>Domain</th><th class="num">Score</th><th>Maturity band</th>{% if peer_mean %}<th class="num">Peer mean</th>{% endif %}<th class="num">vs. target</th></tr></thead>
+      <thead><tr><th>Domain</th><th class="num">Score</th><th>Maturity band</th><th>Next milestone</th><th class="num">vs. floor</th><th class="num">To 5.0</th></tr></thead>
       <tbody>
         {% for d in domains %}
+        {% set nx = 3.0 if (d.score or 0) < 3.0 else (4.0 if (d.score or 0) < 4.0 else 5.0) %}
+        {% set nxlabel = 'Systematic' if nx == 3.0 else ('Proactive' if nx == 4.0 else 'World-class') %}
         <tr>
           <td><b>{{ d.code }}</b> &nbsp;{{ d.name }}</td>
           <td class="num" style="color: {{ d.level.color }}">{{ '%.2f'|format(d.score) if d.score is not none else '—' }}</td>
           <td>{% if d.level.n %}Level {{ d.level.n }} — {{ d.level.label }}{% else %}—{% endif %}</td>
-          {% if peer_mean %}<td class="num mute">{{ '%.1f'|format(peer_mean) }}</td>{% endif %}
-          <td class="num" style="color: {{ '#1E7A52' if d.score and d.score >= 3.0 else '#C0392B' }}">{{ '%+.2f'|format((d.score or 0) - 3.0) if d.score is not none else '—' }}</td>
+          <td class="mute">{% if d.score is not none %}{{ '%.1f'|format(nx) }} {{ nxlabel }} <span style="color:var(--blue)">(+{{ '%.2f'|format(nx - d.score) }})</span>{% else %}—{% endif %}</td>
+          <td class="num" style="color: {{ '#1E7A52' if d.score and d.score >= 3.0 else '#C0392B' }}">{% if d.score is not none %}{{ '✓ cleared' if d.score >= 3.0 else '%+.2f'|format(d.score - 3.0) }}{% else %}—{% endif %}</td>
+          <td class="num mute">{{ '%.2f'|format(5.0 - d.score) if d.score is not none else '—' }}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
-    <div class="src">vs. target = domain score minus the 3.0 “systematic” floor. {% if peer_mean %}Peer mean across benchmarked sites in the same segment.{% endif %} &nbsp; <b>{{ firm.name }}</b></div>
+    <div class="src"><b>Next milestone</b> = the next maturity band and the gain needed to reach it. <b>vs. floor</b> = clearance over the 3.0 systematic floor. <b>To 5.0</b> = points of headroom remaining to world-class. &nbsp; <b>{{ firm.name }}</b></div>
   </div>
 </section>
 
@@ -274,8 +310,8 @@ tbody td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-2); vert
 
   <div class="spacer-lg"></div>
   <div class="cols">
-    <div class="chartcard avoid">{{ domain_radar|safe }}<div class="chartcap">Domain maturity vs. {{ 'peer mean' if peer_mean else 'the 3.0 (systematic) target' }}</div></div>
-    <div class="chartcard avoid">{{ pillar_radar|safe }}<div class="chartcap">People · Process · Technology profile</div></div>
+    <div class="chartcard avoid">{{ domain_radar|safe }}<div class="chartcap">Dashed = {{ 'peer mean' if peer_mean else '3.0 systematic floor' }} · outer ring = 5.0 world-class</div></div>
+    <div class="chartcard avoid">{{ pillar_radar|safe }}<div class="chartcap">People · Process · Technology · outer ring = 5.0 world-class</div></div>
   </div>
   <div class="exhibit"><div class="src">Exhibit 3 · Domain and pillar maturity profiles. People = Workforce + Leadership; Process = Work Management + Strategy &amp; Governance; Technology = Asset Information. &nbsp; <b>{{ firm.name }}</b></div></div>
 </section>
@@ -433,6 +469,7 @@ tbody td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-2); vert
   </table>
   <div class="spacer"></div>
   <div class="cols2">
+    <p><b>Targets.</b> Maturity is benchmarked against <b>world-class (5.0)</b>. The 3.0 line is the systematic floor — the ISO 55001-aligned minimum for documented, repeatable practice — and 4.0 is the recommended near-term target. Every domain is reported against all three, so clearing the floor is never mistaken for being done.</p>
     <p><b>Role weighting.</b> Responses are weighted by respondent role (technician, supervisor, manager, planner, reliability engineer) so the people closest to the work carry appropriate weight.</p>
     <p><b>Evidence policy.</b> A high score (≥4) on an evidence-required question is credited only when supporting evidence is verified; otherwise it is moderated. Weakest-link and cross-domain caps prevent a single critical failure (e.g. no stop-work authority, no CMMS) from being masked by strong scores elsewhere.</p>
     <p><b>Confidence band.</b> Scoring confidence is reduced by evidence gaps and cross-role variance; the band shown is the overall score ± (1 − confidence).</p>

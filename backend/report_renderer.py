@@ -254,6 +254,13 @@ class HTMLReportRenderer:
             "report_date": datetime.utcnow().strftime("%B %d, %Y"),
             "overall": round(overall, 2) if overall is not None else None,
             "overall_level": _level(overall),
+            # Maturity targets the whole report is framed against. 3.0 is the
+            # ISO 55001-aligned "systematic" floor (minimum acceptable), 4.0 the
+            # recommended near-term target, 5.0 world-class. Domains are measured
+            # against world-class, not the floor.
+            "floor": 3.0, "target": 4.0, "world": 5.0,
+            "overall_gap": round(5.0 - overall, 2) if overall is not None else None,
+            "below_floor": len([d for d in domain_rollup if d["score"] is not None and d["score"] < 3.0]),
             "confidence": round((scoring.get("confidence") or 0) * 100) if scoring.get("confidence") is not None else None,
             "confidence_band": scoring.get("confidence_band") or [None, None],
             "iso_readiness": round((scoring.get("iso_55001_readiness") or 0) * 100) if scoring.get("iso_55001_readiness") is not None else None,
