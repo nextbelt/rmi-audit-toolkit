@@ -17,7 +17,11 @@
               "question_text": "Rate the extent to which maintenance technicians can independently diagnose and repair equipment failures within their assigned asset class without requiring external support.",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -38,7 +42,10 @@
               "question_text": "What percentage of maintenance technicians hold current, relevant trade certifications or licenses for their assigned work areas?",
               "question_type": "DATA_INPUT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -59,7 +66,10 @@
               "question_text": "Do technicians demonstrate proficiency in precision maintenance techniques (e.g., laser alignment, precision balancing, proper torquing, contamination control) during observed work execution?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -80,7 +90,10 @@
               "question_text": "Is there a documented skills matrix that maps each technician's competencies against the technical requirements of the assets they maintain?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -101,7 +114,10 @@
               "question_text": "How effectively do technicians utilize condition monitoring tools (vibration analyzers, ultrasonic detectors, infrared cameras) assigned to them?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -122,7 +138,9 @@
               "question_text": "What is the first-time fix rate for corrective maintenance work orders completed by in-house technicians over the past 12 months?",
               "question_type": "DATA_INPUT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": false,
               "evidence_required": true,
@@ -143,7 +161,10 @@
               "question_text": "Do technicians actively participate in root cause analysis (RCA) or failure analysis activities when equipment failures occur?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -164,7 +185,10 @@
               "question_text": "Are multi-craft or cross-functional skills actively developed among maintenance technicians to reduce dependency on single-skill specialists?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": false,
@@ -185,7 +209,10 @@
               "question_text": "Can technicians accurately complete required CMMS work order fields including failure codes, labor hours, parts used, and as-found/as-left conditions?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -206,7 +233,9 @@
               "question_text": "How frequently do technicians identify and report defects or abnormal conditions outside the scope of their current work order?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -233,7 +262,11 @@
               "question_text": "Rate the overall effectiveness of the maintenance training program in developing technician competency and closing identified skill gaps.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -254,7 +287,10 @@
               "question_text": "What is the average annual training hours per maintenance technician (including OJT, classroom, e-learning, and vendor training)?",
               "question_type": "DATA_INPUT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -275,7 +311,10 @@
               "question_text": "Is there a structured on-the-job training (OJT) program with qualified trainers, task-specific checklists, and sign-off requirements?",
               "question_type": "BINARY",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -296,7 +335,10 @@
               "question_text": "Are training needs systematically identified based on skills gap analysis, equipment failure trends, and new technology introductions?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -317,7 +359,10 @@
               "question_text": "Does the organization have a formal apprenticeship or journeyman development program for maintenance trades?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -338,7 +383,9 @@
               "question_text": "How are training outcomes evaluated — is there a process to verify that training translates to improved on-the-job performance?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -359,7 +406,10 @@
               "question_text": "Is there a dedicated training budget for the maintenance department, and is it protected from mid-year cuts?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -380,7 +430,10 @@
               "question_text": "Are new maintenance employees (including contractors) required to complete a site-specific technical orientation covering critical equipment, safety systems, and local procedures before performing independent work?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -401,7 +454,9 @@
               "question_text": "Do supervisors and planners receive dedicated training in leadership, communication, planning/scheduling, and reliability principles?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": false,
@@ -422,7 +477,9 @@
               "question_text": "Is there a succession plan that identifies and develops future maintenance leaders and critical technical experts?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -449,7 +506,11 @@
               "question_text": "Rate the organization's ability to capture, retain, and transfer critical maintenance knowledge — especially from experienced technicians approaching retirement.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -470,7 +531,10 @@
               "question_text": "Are standard operating procedures (SOPs) and job plans current, accurate, and readily accessible to technicians at the point of work?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -491,7 +555,10 @@
               "question_text": "Is equipment-specific technical documentation (OEM manuals, P&IDs, wiring diagrams, nameplate data) organized, current, and accessible to maintenance personnel?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -512,7 +579,10 @@
               "question_text": "Are lessons learned from equipment failures, RCAs, and project implementations documented and shared across the maintenance organization?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -533,7 +603,10 @@
               "question_text": "Do maintenance technicians have access to a searchable knowledge base or digital platform for troubleshooting guidance, historical repair data, and best practices?",
               "question_type": "BINARY",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -554,7 +627,9 @@
               "question_text": "Is there a formal document control process ensuring maintenance procedures, drawings, and technical references are reviewed and updated on a defined schedule?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -575,7 +650,10 @@
               "question_text": "Are shift handover processes structured to ensure critical maintenance knowledge and ongoing job status are effectively transferred between shifts?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -596,7 +674,9 @@
               "question_text": "What percentage of critical equipment has documented troubleshooting decision trees or diagnostic flowcharts available to maintenance technicians?",
               "question_type": "DATA_INPUT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -617,7 +697,9 @@
               "question_text": "Are maintenance communities of practice or technical forums established to facilitate knowledge sharing across crews, shifts, or sites?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.6,
               "is_critical": false,
               "evidence_required": false,
@@ -638,7 +720,10 @@
               "question_text": "How well does the organization protect against single-point-of-knowledge risk — where only one person understands a critical equipment system or process?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -671,7 +756,11 @@
               "question_text": "Rate the level of visible, active leadership commitment to maintenance and reliability excellence at the site management level.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -692,7 +781,10 @@
               "question_text": "Does site leadership actively support the weekly maintenance scheduling process by protecting the schedule from non-emergency break-ins?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -713,7 +805,10 @@
               "question_text": "Is there a documented and communicated maintenance and reliability strategy or policy endorsed by site or corporate leadership?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -734,7 +829,10 @@
               "question_text": "Does leadership allocate sufficient budget for maintenance materials, spare parts, and tools without chronic shortages that delay work execution?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -755,7 +853,10 @@
               "question_text": "Does leadership conduct regular maintenance and reliability performance reviews with accountability for improvement targets?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -776,7 +877,10 @@
               "question_text": "Do operations and maintenance leadership have a collaborative relationship with shared accountability for equipment reliability and availability?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -797,7 +901,10 @@
               "question_text": "Does leadership provide maintenance teams with adequate access to equipment for planned maintenance windows without chronic schedule erosion?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -818,7 +925,9 @@
               "question_text": "How effectively does leadership communicate the business case for reliability to all levels of the organization?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": false,
@@ -839,7 +948,9 @@
               "question_text": "Does leadership invest in and support the adoption of modern maintenance technologies (mobility, sensors, analytics, drones, AR)?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -860,7 +971,10 @@
               "question_text": "Does leadership set and enforce clear expectations for work quality standards in maintenance execution?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -875,6 +989,78 @@
               "iso_55001_clause": "8.1",
               "calibration_anchor": "A site where supervisors sign off on quality checklists for critical repairs, rework rate is tracked monthly, and leadership reviews quality trends quarterly scores a 4.",
               "practice_link": "PL-LC.1-10"
+            },
+            {
+              "question_code": "LC.1-OP1",
+              "question_text": "From operations' perspective, is maintenance treated as a strategic partner in achieving production and reliability goals — rather than a reactive 'fix-it' service or cost center?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 2.0,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "Maintenance is seen purely as a cost/fix-it function, engaged only when equipment breaks.",
+                "2": "Maintenance is tolerated as necessary but rarely consulted on production decisions.",
+                "3": "Maintenance is recognized as important; some joint planning, but production priorities routinely override it.",
+                "4": "Maintenance is a respected partner consulted on most production and reliability decisions.",
+                "5": "Maintenance is a full strategic partner; reliability is a shared production goal with joint ownership and metrics."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
+            },
+            {
+              "question_code": "LC.1-OP2",
+              "question_text": "Does operations release equipment for planned maintenance per the agreed schedule, rather than routinely deferring or denying maintenance windows to protect short-term output?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 2.0,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "PM windows are routinely denied or deferred; equipment is run to failure to keep producing.",
+                "2": "Windows are often cut or cancelled under production pressure.",
+                "3": "Windows are usually honored but frequently renegotiated when output is tight.",
+                "4": "Planned windows are protected; deviations are the exception and are agreed jointly.",
+                "5": "Planned maintenance windows are non-negotiable commitments; output and reliability are balanced by agreed rules."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
+            },
+            {
+              "question_code": "LC.1-OP3",
+              "question_text": "Does operations leadership trust and act on maintenance's technical recommendations — to repair, replace, or take equipment offline?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 1.5,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "Maintenance recommendations are frequently overridden or ignored.",
+                "2": "Recommendations are accepted only when failure is imminent.",
+                "3": "Recommendations are generally trusted but challenged under production pressure.",
+                "4": "Maintenance's technical judgment is trusted and usually acted on.",
+                "5": "Maintenance's technical judgment is trusted and acted on consistently, even at short-term output cost."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
             }
           ]
         },
@@ -887,7 +1073,11 @@
               "question_text": "Rate the integration of safety and reliability cultures — do personnel understand that reliable equipment is inherently safer equipment?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -908,7 +1098,10 @@
               "question_text": "Is there a proactive near-miss and hazard reporting culture in the maintenance department, and are reports acted upon?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -929,7 +1122,10 @@
               "question_text": "Are lockout/tagout (LOTO) and energy isolation procedures rigorously followed for all maintenance activities, without shortcuts or workarounds?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -950,7 +1146,10 @@
               "question_text": "Do maintenance personnel feel empowered to stop work if they identify an unsafe condition or a quality concern without fear of reprisal?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -971,7 +1170,10 @@
               "question_text": "Are pre-job safety and planning briefs conducted before maintenance activities, covering hazards, LOTO requirements, procedures, and contingencies?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -992,7 +1194,10 @@
               "question_text": "Is there a no-blame culture for reporting equipment failures, near-misses, and quality defects so that root causes are addressed rather than individuals punished?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": false,
@@ -1013,7 +1218,9 @@
               "question_text": "Are maintenance-related safety incidents and equipment failures investigated jointly by safety, maintenance, and operations teams?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1034,7 +1241,10 @@
               "question_text": "Do maintenance personnel maintain good housekeeping standards in work areas, shops, and around maintained equipment?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1055,7 +1265,10 @@
               "question_text": "Is operator care (basic operator-performed maintenance such as cleaning, inspecting, lubricating) practiced as part of the reliability culture?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1076,7 +1289,9 @@
               "question_text": "Are maintenance and reliability achievements recognized and celebrated to reinforce desired behaviors and cultural norms?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.6,
               "is_critical": false,
               "evidence_required": false,
@@ -1103,7 +1318,11 @@
               "question_text": "Rate the effectiveness of the maintenance organizational structure in supporting efficient work execution and clear accountability.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1124,7 +1343,10 @@
               "question_text": "Is the maintenance planning function separated from day-to-day supervision so that planners can focus on future work preparation?",
               "question_type": "BINARY",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1145,7 +1367,10 @@
               "question_text": "Is there a dedicated reliability engineering function with clear accountability for failure elimination and maintenance strategy optimization?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1166,7 +1391,10 @@
               "question_text": "Are roles, responsibilities, and authorities for maintenance, operations, engineering, and storeroom clearly defined and understood across departments?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1187,7 +1415,10 @@
               "question_text": "Is the storeroom and MRO supply chain function organizationally positioned to support maintenance effectively with clear performance expectations?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1208,7 +1439,10 @@
               "question_text": "What is the ratio of maintenance supervisors to technicians, and does it allow for effective coaching, quality oversight, and work coordination?",
               "question_type": "DATA_INPUT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1229,7 +1463,10 @@
               "question_text": "Is the use of contract maintenance labor managed strategically with clear scope, quality expectations, and performance oversight?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1250,7 +1487,9 @@
               "question_text": "Does the maintenance organization have adequate administrative and coordination support so that supervisors and technicians are not burdened with excessive paperwork?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.6,
               "is_critical": false,
               "evidence_required": false,
@@ -1271,7 +1510,9 @@
               "question_text": "Is there a formal change management process for organizational changes that affect the maintenance department (reorganizations, headcount changes, role modifications)?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.6,
               "is_critical": false,
               "evidence_required": false,
@@ -1292,7 +1533,9 @@
               "question_text": "Is the maintenance organization's headcount and skill mix periodically reviewed against workload requirements and asset criticality to ensure adequate coverage?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1307,6 +1550,102 @@
               "iso_55001_clause": "7.1",
               "calibration_anchor": "A site that annually compares CMMS-derived labor demand against available technician hours by craft and uses the analysis to justify a hiring plan scores a 4.",
               "practice_link": "PL-LC.3-10"
+            },
+            {
+              "question_code": "LC.3-OP1",
+              "question_text": "Are operators expected to perform, and held accountable for, basic asset care — cleaning, inspection, lubrication, and early fault reporting (operator-driven / autonomous maintenance)?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 1.5,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "Operators run equipment only; no basic care or fault reporting is expected.",
+                "2": "Basic care happens informally and inconsistently for a few assets.",
+                "3": "Some operator basic-care tasks are defined but not consistently followed or tracked.",
+                "4": "Operator basic-care routines are defined, trained, and largely followed.",
+                "5": "Operator basic care is standard, trained, audited and tracked; early fault reporting is the norm."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
+            },
+            {
+              "question_code": "LC.3-OP2",
+              "question_text": "Is equipment downtime and loss attributed jointly and blamelessly across operations and maintenance (root-cause based), rather than defaulting to 'maintenance's fault'?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 2.0,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "Downtime is blamed on maintenance by default; little or no joint analysis.",
+                "2": "Blame is common; only catastrophic events get any joint review.",
+                "3": "Major events are reviewed jointly; smaller recurring losses go unanalyzed.",
+                "4": "Most significant losses are analyzed jointly to root cause with shared actions.",
+                "5": "All significant losses are analyzed jointly and blamelessly to root cause, with shared, tracked actions."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
+            },
+            {
+              "question_code": "LC.3-OP3",
+              "question_text": "Does operations involve maintenance and reliability engineering early — in production planning, process changes, and new-equipment decisions — rather than only after problems occur?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 1.5,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "Maintenance is engaged only after problems arise.",
+                "2": "Maintenance is informed of changes late, with little ability to influence them.",
+                "3": "Maintenance is consulted on major changes, often too late to shape them.",
+                "4": "Maintenance/reliability are usually involved early in planning and design.",
+                "5": "Maintenance/reliability are embedded partners from the start of planning, change, and design decisions."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
+            },
+            {
+              "question_code": "LC.3-OP4",
+              "question_text": "From operations' perspective, does maintenance reliably deliver on its commitments — schedule adherence, repair quality, and equipment returned ready to run?",
+              "question_type": "LIKERT",
+              "target_role": "OPERATIONS",
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
+              "weight": 1.5,
+              "is_critical": false,
+              "evidence_required": false,
+              "evidence_guidance": "Interview operations/production leadership directly. Compare their rating to the maintenance team's view of the same partnership to surface the perception gap.",
+              "scoring_rubric": {
+                "1": "Frequent missed schedules, rework, and equipment returned not ready to run.",
+                "2": "Delivery is unpredictable; trust is low.",
+                "3": "Maintenance is generally reliable but with periodic lapses that erode trust.",
+                "4": "Maintenance consistently meets schedule and quality commitments.",
+                "5": "Maintenance reliably delivers on schedule and quality; operations has high trust in handbacks."
+              },
+              "calibration_anchor": "Operations-perspective question — captures how production leadership views the maintenance partnership.",
+              "practice_link": null,
+              "iso_55001_clause": null
             }
           ]
         }
@@ -1325,7 +1664,11 @@
               "question_text": "Rate the overall maturity of the maintenance planning and scheduling process — from work identification through execution and closeout.",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -1346,7 +1689,10 @@
               "question_text": "Are maintenance job plans developed with sufficient detail — including steps, safety requirements, materials, tools, labor estimates, and equipment specifications?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1367,7 +1713,10 @@
               "question_text": "What is the current weekly schedule compliance rate for planned maintenance work?",
               "question_type": "DATA_INPUT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1388,7 +1737,10 @@
               "question_text": "Is there a formal weekly scheduling meeting attended by maintenance and operations that produces a frozen weekly schedule with defined break-in rules?",
               "question_type": "BINARY",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -1409,7 +1761,10 @@
               "question_text": "Is the maintenance backlog actively managed with aging analysis, prioritization, and regular review to prevent uncontrolled growth?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1430,7 +1785,10 @@
               "question_text": "Are work orders prioritized using a consistent, risk-based priority system that is understood and respected across the organization?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1451,7 +1809,10 @@
               "question_text": "What percentage of total maintenance labor hours are spent on planned vs. unplanned (reactive/emergency) work?",
               "question_type": "DATA_INPUT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1472,7 +1833,9 @@
               "question_text": "Are post-job reviews (planned vs. actual) conducted to improve future job plan accuracy and planning effectiveness?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1493,7 +1856,10 @@
               "question_text": "Is there a formal work request screening and approval process that prevents duplicate, unnecessary, or incomplete work orders from entering the backlog?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1514,7 +1880,9 @@
               "question_text": "Are maintenance outages and turnarounds planned with sufficient lead time, scope discipline, and integrated scheduling?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1541,7 +1909,11 @@
               "question_text": "Rate the overall maturity and effectiveness of the preventive and predictive maintenance program in preventing unplanned equipment failures.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -1562,7 +1934,10 @@
               "question_text": "What is the current PM compliance rate (PMs completed on time vs. PMs scheduled)?",
               "question_type": "DATA_INPUT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1583,7 +1958,10 @@
               "question_text": "Are PM task lists periodically reviewed and optimized based on failure history, condition monitoring data, and RCM/FMEA analysis to eliminate non-value-added tasks?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1604,7 +1982,10 @@
               "question_text": "Which predictive maintenance technologies are deployed and what percentage of critical assets are covered by PdM routes?",
               "question_type": "MULTI_SELECT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1625,7 +2006,10 @@
               "question_text": "Are PM findings and condition data used to generate follow-up corrective work orders that are tracked through planning and execution?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1646,7 +2030,10 @@
               "question_text": "Is the lubrication program managed as an engineered reliability activity with specified lubricants, quantities, frequencies, and contamination control?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -1667,7 +2054,10 @@
               "question_text": "Are asset criticality rankings established and used to determine the appropriate maintenance strategy (run-to-failure, PM, PdM, or redesign) for each asset?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1688,7 +2078,9 @@
               "question_text": "Do PdM analysts produce actionable reports with clear severity ratings, recommended actions, and timeframes for corrective work?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1709,7 +2101,10 @@
               "question_text": "Is the PM program integrated with the CMMS such that PM schedules are auto-generated, compliance is tracked, and overdue PMs are escalated?",
               "question_type": "BINARY",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1730,7 +2125,9 @@
               "question_text": "Has the organization conducted formal RCM or FMEA studies on its most critical equipment to determine optimal failure management strategies?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1757,7 +2154,11 @@
               "question_text": "Rate the overall quality of maintenance work execution — do jobs get done right the first time, on time, and to standard?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -1778,7 +2179,10 @@
               "question_text": "Are proper tools, equipment, and consumables available and staged for maintenance work before the job begins?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1799,7 +2203,10 @@
               "question_text": "Is there a formal work order closeout process that captures failure codes, actual labor hours, parts used, and as-found/as-left conditions?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -1820,7 +2227,9 @@
               "question_text": "What is the estimated wrench time (direct productive work time as a percentage of available time) for maintenance technicians?",
               "question_type": "DATA_INPUT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1841,7 +2250,10 @@
               "question_text": "Do maintenance technicians consistently follow approved procedures and job plans during work execution rather than relying on memory or personal methods?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -1862,7 +2274,10 @@
               "question_text": "Are maintenance rework and repeat failure events tracked, analyzed, and acted upon to eliminate recurring quality issues?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1883,7 +2298,10 @@
               "question_text": "Are critical quality hold points defined in maintenance procedures (e.g., torque verification, alignment checks, leak tests) with mandatory supervisor or quality sign-off?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -1904,7 +2322,10 @@
               "question_text": "Is equipment properly commissioned and tested after maintenance before being returned to operations?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -1925,7 +2346,9 @@
               "question_text": "Are incoming spare parts and materials inspected for quality and specification compliance before being accepted into the storeroom or installed?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -1946,7 +2369,10 @@
               "question_text": "Is there a management of change (MOC) process for maintenance activities that alter equipment configuration, materials, or operating parameters?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -1979,7 +2405,11 @@
               "question_text": "Rate the overall effectiveness of the CMMS/EAM system in supporting maintenance planning, execution, and analysis.",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -2000,7 +2430,10 @@
               "question_text": "Is the asset hierarchy in the CMMS complete, accurate, and structured to support meaningful reliability analysis (functional location → equipment → component)?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -2021,7 +2454,10 @@
               "question_text": "Do all maintenance work orders flow through the CMMS — from request through planning, scheduling, execution, and closeout — with no significant offline or paper-based workarounds?",
               "question_type": "BINARY",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": true,
               "evidence_required": true,
@@ -2042,7 +2478,10 @@
               "question_text": "Is the CMMS accessible to maintenance technicians in the field via mobile devices or kiosks to reduce paperwork and improve data timeliness?",
               "question_type": "BINARY",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2063,7 +2502,10 @@
               "question_text": "Are CMMS failure code hierarchies (problem, cause, remedy) configured to support meaningful failure analysis and reliability trending?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2084,7 +2526,10 @@
               "question_text": "Is CMMS training provided to all users with role-based content and periodic refresher sessions?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": false,
@@ -2105,7 +2550,9 @@
               "question_text": "Is the CMMS integrated with other enterprise systems (financials, procurement, HR, process control) to avoid duplicate data entry and enable holistic asset management?",
               "question_type": "MULTI_SELECT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2126,7 +2573,10 @@
               "question_text": "Is there a designated CMMS system administrator or power user responsible for configuration, data quality, and user support?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2147,7 +2597,10 @@
               "question_text": "Does the CMMS produce standard reports and dashboards that maintenance and operations leadership use for decision-making?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2168,7 +2621,9 @@
               "question_text": "Are spare parts bills of materials (BOMs) attached to equipment records in the CMMS with accurate part numbers and storeroom linkages?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2195,7 +2650,11 @@
               "question_text": "Rate the overall quality and reliability of maintenance data in the CMMS — is it trusted and used for decision-making?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -2216,7 +2675,10 @@
               "question_text": "Are work order data fields (equipment, failure codes, labor hours, parts used) validated for completeness and accuracy before work orders are closed?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2237,7 +2699,10 @@
               "question_text": "Is the equipment master data in CMMS (nameplate data, specifications, serial numbers, installation dates) accurate and complete for critical assets?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2258,7 +2723,10 @@
               "question_text": "Are labor hours accurately recorded on work orders to enable meaningful cost analysis and future job plan estimates?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2279,7 +2747,9 @@
               "question_text": "Is there a process for maintaining data quality when new equipment is installed, existing equipment is modified, or equipment is decommissioned?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2300,7 +2770,10 @@
               "question_text": "Are regular data quality audits conducted on CMMS data with results reported and corrective actions tracked?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2321,7 +2794,9 @@
               "question_text": "Are standardized naming conventions and coding schemes enforced in the CMMS to enable consistent data analysis across the organization?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2342,7 +2817,9 @@
               "question_text": "Is there a clear data ownership model defining who is responsible for the accuracy of different categories of CMMS data?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.6,
               "is_critical": false,
               "evidence_required": false,
@@ -2363,7 +2840,10 @@
               "question_text": "Can maintenance cost data (labor, materials, contractor) be accurately extracted from the CMMS and allocated to individual assets for lifecycle cost analysis?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2384,7 +2864,9 @@
               "question_text": "Is there a process for ensuring that CMMS data entry is timely — work orders created, updated, and closed within defined timeframes?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2411,7 +2893,11 @@
               "question_text": "Rate the organization's use of maintenance and reliability data analytics to drive improvement decisions and resource allocation.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -2432,7 +2918,10 @@
               "question_text": "Is a formal bad-actor or chronic equipment failure elimination program in place with regular reviews and tracked improvement actions?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -2453,7 +2942,10 @@
               "question_text": "Are key reliability metrics (MTBF, MTTR, OEE/availability, failure rates) calculated and trended for critical equipment?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2474,7 +2966,10 @@
               "question_text": "Are root cause analysis (RCA) investigations conducted for significant equipment failures using a structured methodology?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -2495,7 +2990,9 @@
               "question_text": "Is maintenance cost data analyzed relative to asset replacement value (maintenance cost as % of RAV) to benchmark spending effectiveness?",
               "question_type": "DATA_INPUT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2516,7 +3013,9 @@
               "question_text": "Does the organization use data-driven repair-vs-replace analysis to make capital investment decisions for aging or chronic-failure assets?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2537,7 +3036,9 @@
               "question_text": "Are PdM condition monitoring trends analyzed to optimize monitoring intervals and validate alert thresholds?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2558,7 +3059,10 @@
               "question_text": "Is downtime data systematically categorized (planned vs. unplanned, maintenance vs. operations vs. external) to enable accurate loss analysis?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2579,7 +3083,10 @@
               "question_text": "Are spare parts inventory levels optimized based on criticality, consumption data, and lead time analysis rather than arbitrary stocking decisions?",
               "question_type": "LIKERT",
               "target_role": "PLANNER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2600,7 +3107,10 @@
               "question_text": "Does the organization use leading indicators (PdM findings, defect backlog, PM compliance, near-miss reports) in addition to lagging indicators (failures, costs, downtime) to manage reliability performance?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2633,7 +3143,11 @@
               "question_text": "Rate the maturity of the organization's asset management policy and strategic asset management plan (SAMP) in guiding maintenance and reliability decisions.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -2654,7 +3168,10 @@
               "question_text": "Are long-term asset lifecycle plans established for critical assets covering maintenance strategy, capital renewal, and end-of-life decisions?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -2675,7 +3192,10 @@
               "question_text": "Is there a formal risk management framework that includes equipment failure risks alongside safety, environmental, and production risks?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2696,7 +3216,10 @@
               "question_text": "Are asset management objectives cascaded from strategic goals to operational targets with clear linkage between business outcomes and maintenance activities?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2717,7 +3240,10 @@
               "question_text": "Is there a defined and funded capital renewal program for major equipment based on condition assessment, age, and reliability data?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -2738,7 +3264,10 @@
               "question_text": "Are regulatory and compliance requirements for equipment inspection, testing, and maintenance systematically identified and managed?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -2759,7 +3288,10 @@
               "question_text": "Is the maintenance budget developed with input from reliability data, backlog analysis, and asset condition assessments rather than being purely incremental or top-down?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2780,7 +3312,9 @@
               "question_text": "Does the organization benchmark its maintenance and reliability practices and performance against industry peers or recognized standards?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2801,7 +3335,9 @@
               "question_text": "Are maintenance and reliability considered during the design and procurement phase of new equipment (design for maintainability/reliability)?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2822,7 +3358,9 @@
               "question_text": "Is there a documented asset management system (AMS) that defines the processes, roles, tools, and governance for managing physical assets across their lifecycle?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2849,7 +3387,11 @@
               "question_text": "Rate the maturity of the maintenance and reliability KPI system — are the right metrics measured, trended, reviewed, and acted upon?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -2870,7 +3412,10 @@
               "question_text": "Are maintenance KPI targets established based on data analysis, benchmarking, and business objectives rather than arbitrary numbers?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2891,7 +3436,10 @@
               "question_text": "Is there a tiered performance review cadence (daily/weekly/monthly) with appropriate metrics and participants at each level?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2912,7 +3460,10 @@
               "question_text": "Is OEE (Overall Equipment Effectiveness) or a similar composite metric calculated and used to drive improvement on critical production equipment?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2933,7 +3484,10 @@
               "question_text": "Are maintenance and reliability KPIs visible and accessible to frontline maintenance personnel, not just management?",
               "question_type": "OBSERVATIONAL",
               "target_role": "AUDITOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -2954,7 +3508,9 @@
               "question_text": "Is individual and team performance in maintenance linked to reliability KPI outcomes through performance management or incentive programs?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": false,
@@ -2975,7 +3531,10 @@
               "question_text": "Are maintenance audit or assessment programs conducted periodically to identify gaps and drive continuous improvement?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -2996,7 +3555,10 @@
               "question_text": "Are maintenance cost metrics tracked and analyzed at a level that enables meaningful cost optimization (cost per asset, cost per unit of production, labor vs. materials breakdown)?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -3017,7 +3579,9 @@
               "question_text": "Are safety leading indicators (near-misses, hazard reports, safety observations) from maintenance activities tracked and trended separately from the overall site safety metrics?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -3038,7 +3602,9 @@
               "question_text": "Does management review of maintenance performance include trend analysis and forward-looking risk assessment, not just snapshot reporting of current metrics?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -3065,7 +3631,11 @@
               "question_text": "Rate the organization's commitment to and execution of continuous improvement in maintenance and reliability practices.",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["quickscan", "standard", "deepdive"],
+              "assessment_mode": [
+                "quickscan",
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.5,
               "is_critical": true,
               "evidence_required": true,
@@ -3086,7 +3656,10 @@
               "question_text": "Is there a formal process for identifying, prioritizing, and implementing reliability improvement projects with ROI tracking?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -3107,7 +3680,10 @@
               "question_text": "Are frontline maintenance personnel actively engaged in identifying and implementing improvement ideas, not just management-driven initiatives?",
               "question_type": "LIKERT",
               "target_role": "TECHNICIAN",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -3128,7 +3704,10 @@
               "question_text": "Are structured problem-solving methodologies (5-Why, A3, DMAIC, Kaizen) used consistently for maintenance and reliability improvement initiatives?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -3149,7 +3728,9 @@
               "question_text": "Does the organization conduct post-implementation reviews for completed improvement projects to verify sustained results and capture lessons learned?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -3170,7 +3751,10 @@
               "question_text": "Is there a reliability improvement roadmap or master plan that provides a multi-year vision for advancing maintenance and reliability maturity?",
               "question_type": "BINARY",
               "target_role": "MANAGER",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.2,
               "is_critical": true,
               "evidence_required": true,
@@ -3191,7 +3775,10 @@
               "question_text": "Are maintenance process audits conducted regularly to verify adherence to defined work management processes (planning, scheduling, execution, closeout)?",
               "question_type": "LIKERT",
               "target_role": "SUPERVISOR",
-              "assessment_mode": ["standard", "deepdive"],
+              "assessment_mode": [
+                "standard",
+                "deepdive"
+              ],
               "weight": 1.0,
               "is_critical": false,
               "evidence_required": true,
@@ -3212,7 +3799,9 @@
               "question_text": "Does the organization learn from industry events, incidents at other facilities, and emerging best practices to proactively improve its maintenance and reliability programs?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.6,
               "is_critical": false,
               "evidence_required": false,
@@ -3233,7 +3822,9 @@
               "question_text": "Is change management applied when implementing significant maintenance process improvements to ensure adoption and sustainability?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": true,
@@ -3254,7 +3845,9 @@
               "question_text": "Does the organization have a mechanism to prioritize and balance competing improvement initiatives to avoid initiative overload and ensure focus?",
               "question_type": "LIKERT",
               "target_role": "MANAGER",
-              "assessment_mode": ["deepdive"],
+              "assessment_mode": [
+                "deepdive"
+              ],
               "weight": 0.8,
               "is_critical": false,
               "evidence_required": false,

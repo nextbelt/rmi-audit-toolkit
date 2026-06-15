@@ -27,7 +27,7 @@ from config import settings
 from models import Report
 from models_v2 import (
     AssessmentV2, CMMSUploadV2, Domain, Practice, QuestionV2, ResponseV2,
-    Subdomain, SubdomainScore, EvidenceStatus,
+    Subdomain, SubdomainScore, EvidenceStatus, TargetRoleV2,
 )
 from scoring_engine_v2 import ScoringEngineV2
 
@@ -274,6 +274,7 @@ class HTMLReportRenderer:
             "velocity": scoring.get("velocity") or {},
             "roadmap": self._roadmap(domain_rollup),
             "evidence": self._evidence(a.id),
+            "ops_alignment": self._ops_alignment(a.id),
             "benchmark": benchmark,
             "peer_mean": peer_mean,
             "pillar_radar": self._radar_svg([p["name"] for p in pillars], [p["score"] or 0 for p in pillars]),
@@ -439,6 +440,40 @@ class HTMLReportRenderer:
                  (EvidenceStatus.REJECTED.value, "Rejected"),
                  (EvidenceStatus.NOT_REQUIRED.value, "Evidence not required")]
         return [{"label": label, "count": buckets.get(k, 0)} for k, label in order]
+
+    def _ops_alignment(self, assessment_id: int) -> Optional[dict]:
+        """Maintenance↔operations perception gap.
+
+        Operations leaders rate the partnership (OPERATIONS-role questions);
+        maintenance roles rate Leadership & Culture. The gap between the two is
+        often the most actionable cultural signal. Returns None if no operations
+        respondent was interviewed.
+        """
+        rows = (
+            self.db.query(ResponseV2.numeric_score, QuestionV2.question_code,
+                          QuestionV2.question_text, ResponseV2.respondent_role, Domain.code)
+            .join(QuestionV2, ResponseV2.question_id == QuestionV2.id)
+            .join(Subdomain, QuestionV2.subdomain_id == Subdomain.id)
+            .join(Domain, Subdomain.domain_id == Domain.id)
+            .filter(ResponseV2.assessment_id == assessment_id,
+                    ResponseV2.numeric_score.isnot(None),
+                    ResponseV2.is_na == False, ResponseV2.is_draft == False)  # noqa: E712
+            .all()
+        )
+        ops = [(float(s), c, t) for s, c, t, role, dom in rows if role == TargetRoleV2.OPERATIONS]
+        if not ops:
+            return None
+        ops_avg = round(sum(s for s, _, _ in ops) / len(ops), 2)
+        maint_lc = [float(s) for s, c, t, role, dom in rows
+                    if dom == "LC" and role != TargetRoleV2.OPERATIONS]
+        maint_avg = round(sum(maint_lc) / len(maint_lc), 2) if maint_lc else None
+        gap = round(maint_avg - ops_avg, 2) if maint_avg is not None else None
+        lowest = sorted(ops, key=lambda x: x[0])[:5]
+        return {
+            "ops_avg": ops_avg, "ops_count": len(ops),
+            "maint_avg": maint_avg, "gap": gap,
+            "lowest": [{"score": s, "code": c, "text": t, "level": _level(s)} for s, c, t in lowest],
+        }
 
     # ── SVG radar chart ──
     def _radar_svg(self, labels: List[str], values: List[float], *,

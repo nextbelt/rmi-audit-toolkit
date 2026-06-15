@@ -316,6 +316,43 @@ tbody td { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line-2); vert
   <div class="exhibit"><div class="src">Exhibit 3 · Domain and pillar maturity profiles. People = Workforce + Leadership; Process = Work Management + Strategy &amp; Governance; Technology = Asset Information. &nbsp; <b>{{ firm.name }}</b></div></div>
 </section>
 
+<!-- ============ MAINTENANCE–OPERATIONS ALIGNMENT ============ -->
+{% if ops_alignment %}
+<section class="page">
+  <div class="sec"><div class="eyebrow">People — cross-function</div><h2>Maintenance–Operations alignment</h2>
+    <div class="kicker">How <b>operations leadership</b> rates the maintenance partnership, set against how <b>maintenance</b> rates its own leadership &amp; culture. The gap is often the most actionable cultural signal in the assessment — and the one least visible from inside the maintenance department.</div></div>
+
+  <div class="stats">
+    <div class="stat"><div class="v">{{ '%.2f'|format(ops_alignment.ops_avg) }}<span class="u"> / 5</span></div><div class="k"><b>Operations&rsquo; view</b> of the partnership · {{ ops_alignment.ops_count }} response{{ 's' if ops_alignment.ops_count != 1 }}</div></div>
+    {% if ops_alignment.maint_avg is not none %}<div class="stat"><div class="v">{{ '%.2f'|format(ops_alignment.maint_avg) }}<span class="u"> / 5</span></div><div class="k"><b>Maintenance&rsquo;s view</b> of leadership &amp; culture</div></div>{% endif %}
+    {% if ops_alignment.gap is not none %}<div class="stat"><div class="v" style="color: {{ '#C0392B' if ops_alignment.gap >= 1.0 else ('#D9822B' if ops_alignment.gap >= 0.5 else '#2E8C6A') }}">{{ '%+.2f'|format(ops_alignment.gap) }}</div><div class="k"><b>Perception gap</b> — {% if ops_alignment.gap >= 1.0 %}critical disconnect{% elif ops_alignment.gap >= 0.5 %}notable gap{% elif ops_alignment.gap <= -0.5 %}operations more positive{% else %}well aligned{% endif %}</div></div>{% endif %}
+  </div>
+
+  {% if ops_alignment.gap is not none %}
+  <div class="callout">
+    {% if ops_alignment.gap >= 1.0 %}<b>Critical disconnect.</b> Operations rates the maintenance partnership {{ '%.2f'|format(ops_alignment.gap) }} points below how maintenance sees its own leadership &amp; culture. Maintenance is likely overestimating the health of the relationship; the items below are where operations is most critical — address them jointly before they undercut reliability gains.
+    {% elif ops_alignment.gap >= 0.5 %}<b>Notable gap.</b> Operations sees the partnership less favorably than maintenance does ({{ '%+.2f'|format(ops_alignment.gap) }}). Worth a joint conversation on the items below.
+    {% elif ops_alignment.gap <= -0.5 %}<b>Operations is more positive</b> than maintenance about the relationship — uncommon; confirm maintenance isn&rsquo;t under-selling progress, and protect what is working.
+    {% else %}<b>Well aligned.</b> Operations and maintenance see the partnership similarly — a healthy foundation to build on.{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="exhibit avoid" style="margin-top: 16px;">
+    <div class="lab">Exhibit · operations&rsquo; lowest-rated partnership items</div>
+    <div class="hl" style="font-family:'Playfair Display',serif; font-size: 16pt;">What operations is most critical about</div>
+    <table>
+      <thead><tr><th>Item (operations perspective)</th><th class="num">Score</th></tr></thead>
+      <tbody>
+        {% for it in ops_alignment.lowest %}
+        <tr><td><b>{{ it.code }}</b> &nbsp;{{ it.text[:130] }}{% if it.text|length > 130 %}…{% endif %}</td><td class="num" style="color: {{ it.level.color }}">{{ '%.1f'|format(it.score) }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="src">Gap = maintenance&rsquo;s leadership &amp; culture score minus operations&rsquo; partnership score. &nbsp; <b>{{ firm.name }}</b></div>
+  </div>
+</section>
+{% endif %}
+
 <!-- ============ 04 DOMAIN & SUBDOMAIN DETAIL ============ -->
 <section class="page">
   <div class="sec"><div class="eyebrow">04 — Detail</div><h2>Inside each domain</h2>

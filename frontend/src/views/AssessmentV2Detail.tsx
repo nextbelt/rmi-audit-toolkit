@@ -16,6 +16,7 @@ const ROLE_OPTIONS = [
   "MANAGER",
   "PLANNER",
   "RELIABILITY_ENGINEER",
+  "OPERATIONS",
 ];
 
 // Mode tiers are one-way upgrades (free → paid → premium). Existing answers are

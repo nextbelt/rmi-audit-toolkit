@@ -84,6 +84,9 @@ class TargetRoleV2(str, enum.Enum):
     MANAGER = "MANAGER"
     PLANNER = "PLANNER"
     RELIABILITY_ENGINEER = "RELIABILITY_ENGINEER"
+    # Operations / production leadership — interviewed to capture how operations
+    # views the maintenance partnership (the cross-function perception gap).
+    OPERATIONS = "OPERATIONS"
 
 
 class CertificationLevel(str, enum.Enum):

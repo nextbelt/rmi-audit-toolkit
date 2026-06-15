@@ -35,6 +35,7 @@ ROLE_MAP = {
     "PLANNER": TargetRoleV2.PLANNER,
     "AUDITOR": TargetRoleV2.RELIABILITY_ENGINEER,  # vNext renamed AUDITOR → RE
     "RELIABILITY_ENGINEER": TargetRoleV2.RELIABILITY_ENGINEER,
+    "OPERATIONS": TargetRoleV2.OPERATIONS,         # operations/production leadership
 }
 
 DOMAIN_DESCRIPTIONS = {
