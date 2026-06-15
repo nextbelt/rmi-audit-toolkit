@@ -628,9 +628,19 @@ export const AssessmentV2Detail: React.FC = () => {
                           descriptions.
                         </li>
                         <li>
-                          <strong>Interview multiple roles</strong> — select the
-                          appropriate respondent role; different roles see
-                          different questions.
+                          <strong>Roles are responsibilities, not titles</strong> —
+                          pick the role that matches the <em>function</em> and
+                          interview whoever owns it. In a flat shop one person may
+                          answer for several roles (e.g. a lead supervisor covers the
+                          manager questions too). You never need a title you don't
+                          have — the score reflects the answers you collect.
+                        </li>
+                        <li>
+                          <strong>Attribute by role for the cross-function view</strong> —
+                          select a specific role (not "All Roles") so answers are tagged
+                          to that function. Interviewing the <em>Operations</em> role is
+                          what powers the Maintenance–Operations alignment and cultural-gap
+                          analysis in the report.
                         </li>
                         <li>
                           <strong>Gather evidence</strong> — add notes with
@@ -726,6 +736,12 @@ export const AssessmentV2Detail: React.FC = () => {
                     );
                   })}
                 </select>
+                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 6, lineHeight: 1.45 }}>
+                  Roles are responsibilities, not titles — interview whoever owns each
+                  function (in a flat org, one person may answer for several). Pick a
+                  role to tag the answers; that's what surfaces the Operations alignment
+                  &amp; cultural-gap analysis.
+                </div>
               </div>
 
               {/* Progress Bar */}
